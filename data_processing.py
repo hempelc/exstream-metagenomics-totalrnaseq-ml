@@ -12,8 +12,6 @@ import glob
 import os
 import copy
 import logging
-from skbio.stats.composition import multiplicative_replacement #v0.5.6
-from skbio.stats.composition import clr #v0.5.6
 
 # Activate logging for debugging
 logging.basicConfig(level=logging.DEBUG,
@@ -28,9 +26,8 @@ outdir = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_an
 ## File that contains readnumbers for each sample
 readnums = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_analysis/read_nums_exstream_samples.tsv"
 ## What rank should taxa be aggregated on?
-# ("superkingdom", "phylum", "class", "order", "family", "genus", or "species")
-groupby_rank = "genus"
-
+# ("phylum", "class", "order", "family", "genus", or "species")
+groupby_rank = "phylum"
 
 
 # 1 Read in data
@@ -65,7 +62,7 @@ for file in sample_files:
         df["sequence_length"]=[]
     ### Determine covered bases of scaffolds to aggregate information
     ### across scaffolds with similar taxonomic annotation
-    # TEMPORAL CHANGE: eventually this code will be used but the data to test the code is a littel different
+    # TEMPORAL CHANGE: eventually this code will be used but the data to test the code is a little different
     #df["covered_bases"]=df["sequence_length"]*df["coverage"]
     ### Cut df down to relevant columns
     # df_small = df[used_ranks + ["covered_bases", "sequence_length"]]
@@ -165,19 +162,5 @@ master_df_abun_sub = master_df_abun_sub[master_df_abun_sub.sum(axis=1) != 0]
 master_df_abun_sub = master_df_abun_sub.dropna(axis=1)
 
 
-# 4 Generate master df with presence/absence data (0=not found, 1=found():
-### Deepcopy the abundance master df:
-master_df_pa = copy.deepcopy(master_df_abun_sub)
-### Replace all values above 0 with 1:
-master_df_pa[master_df_pa > 0] = 1
-
-
-# 5 Standardize abundances by replacing 0s and taking the centered log ratio
-master_df_abun_sub_transf = pd.DataFrame(clr(multiplicative_replacement(master_df_abun_sub.transpose()))\
-    , index=master_df_abun_sub.transpose().index, columns=master_df_abun_sub.transpose().columns)
-master_df_abun_sub_transf = master_df_abun_sub_transf.transpose()
-
-
-# 6 Save dfs
-master_df_abun_sub_transf.to_csv(os.path.join(outdir, "abundances.csv"), index_label="taxon")
-master_df_pa.to_csv(os.path.join(outdir, "p-a.csv"), index_label="taxon")
+# 4 Save dfs
+master_df_abun_sub.to_csv(os.path.join(outdir, "abundances_" + groupby_rank + ".csv"), index_label="taxon")
