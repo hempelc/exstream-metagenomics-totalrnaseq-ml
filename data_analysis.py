@@ -9,7 +9,9 @@
 import pandas as pd #v1.3.5
 import os
 import copy
+import datetime
 import logging
+import pickle
 import collections
 import random
 import xgboost as xgb
@@ -33,8 +35,8 @@ from sklearn.preprocessing import StandardScaler
 from skopt import BayesSearchCV
 
 # Activate logging for debugging
-logging.basicConfig(level=logging.DEBUG,
-    format = '%(asctime)s - %(levelname)s - %(message)s')
+# logging.basicConfig(level=logging.DEBUG,
+#     format = '%(asctime)s - %(levelname)s - %(message)s')
 
 
 # Parameters set manually
@@ -69,8 +71,13 @@ random_state = 1
 ## Show plots generated during data exploration and feature selection? (True/False)
 plots = True
 
+# Define functions
+## Print datetime and text
+def time_print(text):
+    datetime_now=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(datetime_now + "  ---  " + text)
 
-# Define function for learning curve plotting, taken from Dan Tulpan's course script
+# Learning curve plotting, taken from Dan Tulpan's course script
 def plot_learning_curve2(estimator, title, X, y, ylim=None, cv=None,
                         n_jobs=None, train_sizes=np.linspace(.1, 1.0, 5)):
 
@@ -114,7 +121,13 @@ def plot_learning_curve2(estimator, title, X, y, ylim=None, cv=None,
 # This dict will contain all info
 master_dict = {}
 
+## Make output dir for learning curves
+lcdir = os.path.join(outdir, "learning_curves")
+if not os.path.exists(lcdir):
+    os.makedirs(lcdir)
+
 # Loop over ranks
+counter = 1
 for rank in ranks:
 
     # Read in data
@@ -214,7 +227,8 @@ for rank in ranks:
     test_ponds = random.sample(ponds, 6)
 
     # Run everything for both abundance and p-a data:
-    for data_type in ["abundance", "pa"]:
+    data_types = ["abundance", "pa"]
+    for data_type in data_types:
 
         if data_type=="abundance":
             # Transform abundances by replacing 0s and taking the centered log ratio
@@ -261,7 +275,8 @@ for rank in ranks:
 
 
         # Run everything for both metagenomics and total rna-seq:
-        for seq_type in ["metagenomics", "totalrnaseq"]:
+        seq_types = ["metagenomics", "totalrnaseq"]
+        for seq_type in seq_types:
             if seq_type=="metagenomics":
                 df_taxa = df_taxa_dna
                 df_vars = df_vars_dna
@@ -270,7 +285,7 @@ for rank in ranks:
                 df_vars = df_vars_rna
 
             # Define independent and dependent variables
-            X = df_taxa
+            X = df_taxa.iloc[:, :5]
             y = df_vars[dependent_variable]
             feature_names = df_taxa.columns
 
@@ -357,12 +372,15 @@ for rank in ranks:
             # Run models
             for model in models:
                 combo_name = "_".join([rank, data_type, seq_type, model])
+                combo_num = len(ranks)*len(data_types)*len(seq_types)*len(models)
+                time_print("Processing combo {0}/{1}: {2}...".format(str(counter), str(combo_num), combo_name))
 
                 if model == "xgb":
                     # XGBoost #3 priority
-                    # Turn string classes into numerical classes
+                    ## Turn string classes into numerical classes
                     xgb_y_train = pd.Series(y_train).astype('category').cat.codes
-                    # Define hyperparameters combinations to try
+                    xgb_y_test = pd.Series(y_test).astype('category').cat.codes
+                    ## Define hyperparameters combinations to try
                     xgb_param_dic = {"learning_rate": [0.3, 0.25, 0.2, 0.15, 0.1, 0.05, 0.01],
                         'n_estimators': [int(x) for x in np.linspace(50, 200, 5)],
                         "reg_lambda": list(np.linspace(1, 10, 5)),
@@ -370,21 +388,25 @@ for rank in ranks:
                         "min_child_weight": list(np.linspace(1, 10, 5)),
                         "gamma": list(np.linspace(0, 20, 5)),
                         'max_depth': [3,4,5,6]}
-                    # Define model
+                    ## Define model
                     xgb_model = xgb.XGBClassifier(objective="multi:softmax", random_state=random_state)
                     xgb_bayes_search = BayesSearchCV(xgb_model,
                            xgb_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, xgb_y_train)
-                    # Save best mean MCC
-                    best_xgb_mean_mcc = xgb_bayes_search.best_score_
-                    # Train the model on full training set with identified best hyperparameters
-                    # FIGURE THIS OUT
-
-                    print("Best XGBoost Model parameters:", xgb_bayes_search.best_params_)
-                    print("Best XGBoost Model mean accuracy:", xgb_bayes_search.best_score_)
-                    best_xgb_model = xgb_bayes_search.best_estimator_
-
-                    # ADAPT THIS
-                    master_dict[combo_name]=train score, best params, full-trained model, learning curve, test score
+                    ## Save best mean MCC
+                    best_mean_mcc = xgb_bayes_search.best_score_
+                    ## Train model with identified best hyperparameters and all train data
+                    xgb_model.set_params(**xgb_bayes_search.best_params_)
+                    xgb_model.fit(X_train, xgb_y_train)
+                    ## Save all parameters for reproducibility
+                    best_params = xgb_model.get_params()
+                    # Predict test set and calculate MCC score
+                    xgb_y_test_prediction = xgb_model.predict(X_test)
+                    test_score_mcc = matthews_corrcoef(xgb_y_test, xgb_y_test_prediction)
+                    # Generate learning curve
+                    lc = plot_learning_curve2(xgb_model, combo_name, X_train, xgb_y_train, cv=10, n_jobs=-1)
+                    lc.tight_layout()
+                    lc.savefig(os.path.join(lcdir, combo_name) + ".jpg", dpi=600)
+                    lc.close()
 
                 if model == "rf":
                     ### RF #3 priority
@@ -395,9 +417,21 @@ for rank in ranks:
                     # Define model
                     rf_model = RandomForestClassifier(random_state=random_state)
                     rf_bayes_search = BayesSearchCV(rf_model, rf_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
-                    print("Best RF Model parameters:", rf_bayes_search.best_params_)
-                    print("Best RF Model mean accuracy:", rf_bayes_search.best_score_)
-                    best_rf_model = rf_bayes_search.best_estimator_
+                    ## Save best mean MCC
+                    best_mean_mcc = rf_bayes_search.best_score_
+                    ## Train model with identified best hyperparameters and all train data
+                    rf_model.set_params(**rf_bayes_search.best_params_)
+                    rf_model.fit(X_train, y_train)
+                    ## Save all parameters for reproducibility
+                    best_params = rf_model.get_params()
+                    # Predict test set and calculate MCC score
+                    y_test_prediction = rf_model.predict(X_test)
+                    test_score_mcc = matthews_corrcoef(y_test, y_test_prediction)
+                    # Generate learning curve
+                    lc = plot_learning_curve2(rf_model, combo_name, X_train, y_train, cv=10, n_jobs=-1)
+                    lc.tight_layout()
+                    lc.savefig(os.path.join(lcdir, combo_name) + ".jpg", dpi=600)
+                    lc.close()
 
                 if model == "lsvc":
                     ### Linear SVC #1 priority
@@ -409,9 +443,21 @@ for rank in ranks:
                     lsvc_model = svm.LinearSVC(random_state=random_state, penalty='l2')
                     lsvc_bayes_search = BayesSearchCV(lsvc_model,
                            lsvc_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
-                    print("Best LSVC Model parameters:", lsvc_bayes_search.best_params_)
-                    print("Best LSVC Model mean accuracy:", lsvc_bayes_search.best_score_)
-                    best_lsvc_model = lsvc_bayes_search.best_estimator_
+                    ## Save best mean MCC
+                    best_mean_mcc = lsvc_bayes_search.best_score_
+                    ## Train model with identified best hyperparameters and all train data
+                    lsvc_model.set_params(**lsvc_bayes_search.best_params_)
+                    lsvc_model.fit(X_train, y_train)
+                    ## Save all parameters for reproducibility
+                    best_params = lsvc_model.get_params()
+                    # Predict test set and calculate MCC score
+                    y_test_prediction = lsvc_model.predict(X_test)
+                    test_score_mcc = matthews_corrcoef(y_test, y_test_prediction)
+                    # Generate learning curve
+                    lc = plot_learning_curve2(lsvc_model, combo_name, X_train, y_train, cv=10, n_jobs=-1)
+                    lc.tight_layout()
+                    lc.savefig(os.path.join(lcdir, combo_name) + ".jpg", dpi=600)
+                    lc.close()
 
                 if model == "svc":
                     ### SVC #3 priority
@@ -423,9 +469,21 @@ for rank in ranks:
                     svc_model = svm.SVC(random_state=random_state)
                     svc_bayes_search = BayesSearchCV(svc_model,
                            svc_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
-                    print("Best SVC Model parameters:", svc_bayes_search.best_params_)
-                    print("Best SVC Model mean accuracy:", svc_bayes_search.best_score_)
-                    best_svc_model = svc_bayes_search.best_estimator_
+                    ## Save best mean MCC
+                    best_mean_mcc = svc_bayes_search.best_score_
+                    ## Train model with identified best hyperparameters and all train data
+                    svc_model.set_params(**svc_bayes_search.best_params_)
+                    svc_model.fit(X_train, y_train)
+                    ## Save all parameters for reproducibility
+                    best_params = svc_model.get_params()
+                    # Predict test set and calculate MCC score
+                    y_test_prediction = svc_model.predict(X_test)
+                    test_score_mcc = matthews_corrcoef(y_test, y_test_prediction)
+                    # Generate learning curve
+                    lc = plot_learning_curve2(svc_model, combo_name, X_train, y_train, cv=10, n_jobs=-1)
+                    lc.tight_layout()
+                    lc.savefig(os.path.join(lcdir, combo_name) + ".jpg", dpi=600)
+                    lc.close()
 
                 if model == "lor_ridge":
                     ### Logistic regression with ridge #1 priority
@@ -434,62 +492,107 @@ for rank in ranks:
                         'intercept_scaling': np.linspace(0.5, 1.5, 10),
                         'solver': ['newton-cg','lbfgs', 'sag', 'saga']}
                     # Define model
-                    lor_ridge_model = LogisticRegression(penalty = "l2", random_state=random_state, max_iter=100000)
+                    lor_ridge_model = LogisticRegression(penalty = "l2", random_state=random_state, max_iter=10000000)
                     lor_ridge_bayes_search = BayesSearchCV(lor_ridge_model,
                            lor_ridge_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
-                    print("Best LOR_ridge Model parameters:", lor_ridge_bayes_search.best_params_)
-                    print("Best LOR_ridge Model mean accuracy:", lor_ridge_bayes_search.best_score_)
-                    best_lor_ridge_model = lor_ridge_bayes_search.best_estimator_
+                    ## Save best mean MCC
+                    best_mean_mcc = lor_ridge_bayes_search.best_score_
+                    ## Train model with identified best hyperparameters and all train data
+                    lor_ridge_model.set_params(**lor_ridge_bayes_search.best_params_)
+                    lor_ridge_model.fit(X_train, y_train)
+                    ## Save all parameters for reproducibility
+                    best_params = lor_ridge_model.get_params()
+                    # Predict test set and calculate MCC score
+                    y_test_prediction = lor_ridge_model.predict(X_test)
+                    test_score_mcc = matthews_corrcoef(y_test, y_test_prediction)
+                    # Generate learning curve
+                    lc = plot_learning_curve2(lor_ridge_model, combo_name, X_train, y_train, cv=10, n_jobs=-1)
+                    lc.tight_layout()
+                    lc.savefig(os.path.join(lcdir, combo_name) + ".jpg", dpi=600)
+                    lc.close()
 
                 if model == "lor_lasso":
                     ### Logistic regression with lasso #1 priority
                     lor_lasso_param_dic = {'tol': [1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
                         'C': np.linspace(0.5, 1.5, 10),
                         'intercept_scaling': np.linspace(0.5, 1.5, 10)}
-                    lor_lasso_model = LogisticRegression(penalty = "l1", solver = 'liblinear', random_state=random_state, max_iter=100000)
+                    lor_lasso_model = LogisticRegression(penalty = "l1", solver = 'liblinear', random_state=random_state, max_iter=10000000)
                     lor_lasso_bayes_search = BayesSearchCV(lor_lasso_model,
                            lor_lasso_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
-                    print("Best LOR_lasso Model parameters:", lor_lasso_bayes_search.best_params_)
-                    print("Best LOR_lasso Model mean accuracy:", lor_lasso_bayes_search.best_score_)
-                    best_lor_lasso_model = lor_lasso_bayes_search.best_estimator_
+                    ## Save best mean MCC
+                    best_mean_mcc = lor_lasso_bayes_search.best_score_
+                    ## Train model with identified best hyperparameters and all train data
+                    lor_lasso_model.set_params(**lor_lasso_bayes_search.best_params_)
+                    lor_lasso_model.fit(X_train, y_train)
+                    ## Save all parameters for reproducibility
+                    best_params = lor_lasso_model.get_params()
+                    # Predict test set and calculate MCC score
+                    y_test_prediction = lor_lasso_model.predict(X_test)
+                    test_score_mcc = matthews_corrcoef(y_test, y_test_prediction)
+                    # Generate learning curve
+                    lc = plot_learning_curve2(lor_lasso_model, combo_name, X_train, y_train, cv=10, n_jobs=-1)
+                    lc.tight_layout()
+                    lc.savefig(os.path.join(lcdir, combo_name) + ".jpg", dpi=600)
+                    lc.close()
 
                 if model == "mlp":
                     ### MLP #4 priority
-                    mlp_param_dic = {'hidden_layer_sizes': [(10,),(30,),(50,),(70,),(90,)],
+                    mlp_param_dic = {'hidden_layer_sizes': [round(x) for x in np.linspace(100, len(X_train.columns), 10)],
                         'activation': ['tanh', 'relu', 'logistic', 'identity'],
                         'solver': ['sgd', 'adam', 'lbfgs'],
                         'alpha': [1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
                         'learning_rate': ['constant','adaptive', 'invscaling']}
                     # Define model
-                    mlp_model = MLPClassifier(random_state=random_state, max_iter=100000)
+                    mlp_model = MLPClassifier(random_state=random_state, max_iter=10000000)
                     mlp_bayes_search = BayesSearchCV(mlp_model,
-                           mlp_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train.iloc[:,0:5], y_train)
-                    print("Best MLP Model parameters:", mlp_bayes_search.best_params_)
-                    print("Best MLP Model mean accuracy:", mlp_bayes_search.best_score_)
-                    best_mlp_model = mlp_bayes_search.best_estimator_
+                           mlp_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
+                    ## Save best mean MCC
+                    best_mean_mcc = mlp_bayes_search.best_score_
+                    ## Train model with identified best hyperparameters and all train data
+                    mlp_model.set_params(**mlp_bayes_search.best_params_)
+                    mlp_model.fit(X_train, y_train)
+                    ## Save all parameters for reproducibility
+                    best_params = mlp_model.get_params()
+                    # Predict test set and calculate MCC score
+                    y_test_prediction = mlp_model.predict(X_test)
+                    test_score_mcc = matthews_corrcoef(y_test, y_test_prediction)
+                    # Generate learning curve
+                    lc = plot_learning_curve2(mlp_model, combo_name, X_train, y_train, cv=10, n_jobs=-1)
+                    lc.tight_layout()
+                    lc.savefig(os.path.join(lcdir, combo_name) + ".jpg", dpi=600)
+                    lc.close()
 
                 if model == "knn":
                     ### KNN #2 priority
-                    knn_param_dic = {'n_neighbors': range(3,21),
+                    knn_param_dic = {'n_neighbors': list(range(3,21)),
                         'algorithm': ['ball_tree', 'kd_tree', 'brute'],
-                        'leaf_size': range(20, 40, 2),
+                        'leaf_size': list(range(20, 41, 4)),
                         'weights': ['uniform', 'distance'],
                         'p': [1,2,3]}
                     # Define model
                     knn_model = KNeighborsClassifier()
                     knn_bayes_search = BayesSearchCV(knn_model, knn_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
-                    print("Best KNN Model parameters:", knn_bayes_search.best_params_)
-                    print("Best KNN Model mean accuracy:", knn_bayes_search.best_score_)
-                    best_knn_model = knn_bayes_search.best_estimator_
+                    ## Save best mean MCC
+                    best_mean_mcc = knn_bayes_search.best_score_
+                    ## Train model with identified best hyperparameters and all train data
+                    knn_model.set_params(**knn_bayes_search.best_params_)
+                    knn_model.fit(X_train, y_train)
+                    ## Save all parameters for reproducibility
+                    best_params = knn_model.get_params()
+                    # Predict test set and calculate MCC score
+                    y_test_prediction = knn_model.predict(X_test)
+                    test_score_mcc = matthews_corrcoef(y_test, y_test_prediction)
+                    # Generate learning curve
+                    lc = plot_learning_curve2(knn_model, combo_name, X_train, y_train, cv=10, n_jobs=-1)
+                    lc.tight_layout()
+                    lc.savefig(os.path.join(lcdir, combo_name) + ".jpg", dpi=600)
+                    lc.close()
 
-            seq_type_dic[seq_type] = model_dic
+                # Add model results to master_dict
+                master_dict[combo_name]=[best_mean_mcc, test_score_mcc, best_params]
 
-        # To do: for each model, train with all data usign best parameters, apply to test dataset and obtain performance metrics, save for rank, pa/abundance, metagenomcis/total rna seq
-        model_dic: name: train score, best params, full-trained model, learning curve, test score
+                counter+=1
 
-        master_dic[rank] = model dic
-
-example for learning curve code:
-plot_learning_curve2(best_lor_ridge_model, "title=LOR_ridge", X_train.iloc[:,0:5], y_train, cv=10, n_jobs=-1)
-
-export dic
+### Save the master dict as pickle object
+with open(os.path.join(outdir, "model_scores_dict.pkl"), 'wb') as f:
+    pickle.dump(master_dict, f)
