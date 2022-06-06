@@ -63,9 +63,9 @@ dim_red = False
 pca_perc = 0.5
 ## Select models you want to train
 ## ("xbg" for XGBoosting, "lsvc" for linear SVC, "rf" for random forest,
-## "knn" for KNN, "svc" for SVC, "lor_ridge" for logistic regression with ridge,
-## "lor_lasso" for logistic regression with lasso, "mlp" for multilayer perceptron)
-models = ["xgb", "lsvc", "knn", "svc", "rf", "lor_ridge", 'lor_lasso', 'mlp']
+## "knn" for KNN, "svc" for SVC, "lor-ridge" for logistic regression with ridge,
+## "lor-lasso" for logistic regression with lasso, "mlp" for multilayer perceptron)
+models = ["xgb", "lsvc", "knn", "svc", "rf", "lor-ridge", 'lor_lasso', 'mlp']
 # Set random state for models and pond selection during train test split
 random_state = 1
 ## Show plots generated during data exploration and feature selection? (True/False)
@@ -485,14 +485,14 @@ for rank in ranks:
                     lc.savefig(os.path.join(lcdir, combo_name) + ".jpg", dpi=600)
                     lc.close()
 
-                if model == "lor_ridge":
+                if model == "lor-ridge":
                     ### Logistic regression with ridge #1 priority
                     lor_ridge_param_dic = {'tol': [1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
                         'C': np.linspace(0.5, 1.5, 10),
                         'intercept_scaling': np.linspace(0.5, 1.5, 10),
                         'solver': ['newton-cg','lbfgs', 'sag', 'saga']}
                     # Define model
-                    lor_ridge_model = LogisticRegression(penalty = "l2", random_state=random_state, max_iter=10000000)
+                    lor_ridge_model = LogisticRegression(penalty = "l2", random_state=random_state, max_iter=10000000000)
                     lor_ridge_bayes_search = BayesSearchCV(lor_ridge_model,
                            lor_ridge_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
                     ## Save best mean MCC
@@ -511,12 +511,12 @@ for rank in ranks:
                     lc.savefig(os.path.join(lcdir, combo_name) + ".jpg", dpi=600)
                     lc.close()
 
-                if model == "lor_lasso":
+                if model == "lor-lasso":
                     ### Logistic regression with lasso #1 priority
                     lor_lasso_param_dic = {'tol': [1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
                         'C': np.linspace(0.5, 1.5, 10),
                         'intercept_scaling': np.linspace(0.5, 1.5, 10)}
-                    lor_lasso_model = LogisticRegression(penalty = "l1", solver = 'liblinear', random_state=random_state, max_iter=10000000)
+                    lor_lasso_model = LogisticRegression(penalty = "l1", solver = 'liblinear', random_state=random_state, max_iter=10000000000)
                     lor_lasso_bayes_search = BayesSearchCV(lor_lasso_model,
                            lor_lasso_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
                     ## Save best mean MCC
@@ -543,7 +543,7 @@ for rank in ranks:
                         'alpha': [1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
                         'learning_rate': ['constant','adaptive', 'invscaling']}
                     # Define model
-                    mlp_model = MLPClassifier(random_state=random_state, max_iter=10000000)
+                    mlp_model = MLPClassifier(random_state=random_state, max_iter=10000000000)
                     mlp_bayes_search = BayesSearchCV(mlp_model,
                            mlp_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
                     ## Save best mean MCC
@@ -564,7 +564,7 @@ for rank in ranks:
 
                 if model == "knn":
                     ### KNN #2 priority
-                    knn_param_dic = {'n_neighbors': list(range(3,21)),
+                    knn_param_dic = {'n_neighbors': list(range(3,9)),
                         'algorithm': ['ball_tree', 'kd_tree', 'brute'],
                         'leaf_size': list(range(20, 41, 4)),
                         'weights': ['uniform', 'distance'],
@@ -593,6 +593,16 @@ for rank in ranks:
 
                 counter+=1
 
-### Save the master dict as pickle object
+
+# Save the master dict as pickle object
 with open(os.path.join(outdir, "model_scores_dict.pkl"), 'wb') as f:
     pickle.dump(master_dict, f)
+
+# Turn the master df into df and save
+score_df = pd.DataFrame(master_dict).transpose().drop(2, axis=1)
+score_df.columns = ["train_score_mcc", "test_score_mcc"]
+score_df["rank"] = score_df.index.str.split("_").str[0]
+score_df["datatype"] = score_df.index.str.split("_").str[1]
+score_df["seqtype"] = score_df.index.str.split("_").str[2]
+score_df["model"] = score_df.index.str.split("_").str[3]
+score_df.to_csv(os.path.join(outdir, "score_df.csv"), index=False)
