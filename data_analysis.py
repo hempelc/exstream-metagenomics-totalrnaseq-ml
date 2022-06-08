@@ -6,7 +6,6 @@
 
 # Partially following https://towardsdatascience.com/machine-learning-with-python-classification-complete-tutorial-d2c99dc524ec
 
-import pandas as pd #v1.3.5
 import os
 import copy
 import datetime
@@ -14,6 +13,8 @@ import logging
 import pickle
 import collections
 import random
+import warnings
+import pandas as pd #v1.3.5
 import xgboost as xgb
 import numpy as np
 import matplotlib.pyplot as plt
@@ -38,17 +39,19 @@ from skopt import BayesSearchCV
 # logging.basicConfig(level=logging.DEBUG,
 #     format = '%(asctime)s - %(levelname)s - %(message)s')
 
+# Define that warnings are not printed to console
+warnings.filterwarnings("ignore")
+
 
 # Parameters set manually
 ## Full path to directory that contains abundance/p-a data generated on the basis of multiple taxonomic ranks
-workdir = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_analysis/"
+workdir = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_analysis_new/"
 ## Full path to out directory
 outdir = workdir
 ## File that contains sample infos, i.e., classes
-sample_info_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_analysis/sample_info.csv"
+sample_info_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_analysis_new/sample_info.csv"
 ## Ranks to include into analysis (looped over)
-#ranks = ["phylum", "class", "order", "family", "genus", "species"]
-ranks = ["phylum"]
+ranks = ["phylum", "class", "order", "family", "genus", "species"]
 ## Set dependent variable ("pestidice_treatment", "sediment_addition", "pesticide_and_sediment")
 dependent_variable = "pesticide_and_sediment"
 ## Apply feature selection? (True/False)
@@ -65,11 +68,11 @@ pca_perc = 0.5
 ## ("xbg" for XGBoosting, "lsvc" for linear SVC, "rf" for random forest,
 ## "knn" for KNN, "svc" for SVC, "lor-ridge" for logistic regression with ridge,
 ## "lor-lasso" for logistic regression with lasso, "mlp" for multilayer perceptron)
-models = ["xgb", "lsvc", "knn", "svc", "rf", "lor-ridge", 'lor_lasso', 'mlp']
+models = ["xgb", "lsvc", "knn", "svc", "rf", "lor-ridge", 'lor-lasso', 'mlp']
 # Set random state for models and pond selection during train test split
 random_state = 1
 ## Show plots generated during data exploration and feature selection? (True/False)
-plots = True
+plots = False
 
 # Define functions
 ## Print datetime and text
@@ -131,7 +134,7 @@ counter = 1
 for rank in ranks:
 
     # Read in data
-    abundances = pd.read_csv("/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_analysis/abundances_" + rank + ".csv") # Adapt
+    abundances = pd.read_csv(os.path.join(workdir, "abundances_" + rank + ".csv"))
     abundances["taxon"] = abundances["taxon"].fillna("NA")
     abundances = abundances.set_index("taxon")
     abundances.index.name = None
@@ -201,8 +204,9 @@ for rank in ranks:
     print("Number of taxa unique to metagenomics: {0}".format(len([x for x in dna_taxa if x not in rna_taxa])))
     print("Number of taxa unique to total rna-seq: {0}".format(len([x for x in rna_taxa if x not in dna_taxa])))
     ## Dependent variable distribution
-    px.bar(df_vars_dna[dependent_variable].value_counts().sort_values(), orientation='h', title='class distribution {0} metagenomics'.format(dependent_variable))
-    px.bar(df_vars_rna[dependent_variable].value_counts().sort_values(), orientation='h', title='class distribution {0} total rna-seq'.format(dependent_variable))
+    if plots==True:
+        px.bar(df_vars_dna[dependent_variable].value_counts().sort_values(), orientation='h', title='class distribution {0} metagenomics'.format(dependent_variable))
+        px.bar(df_vars_rna[dependent_variable].value_counts().sort_values(), orientation='h', title='class distribution {0} total rna-seq'.format(dependent_variable))
 
 
     # To later split the data into train and test data, some manual adjustments are required
@@ -225,11 +229,11 @@ for rank in ranks:
     ## of the random.sample method to generate reproducible results!
     random.seed(random_state)
     test_ponds = random.sample(ponds, 6)
-
+    # Check if same ponds are selected in every loop
+    print("Test ponds:", test_ponds)
     # Run everything for both abundance and p-a data:
     data_types = ["abundance", "pa"]
     for data_type in data_types:
-
         if data_type=="abundance":
             # Transform abundances by replacing 0s and taking the centered log ratio
             df_taxa_all = pd.DataFrame(clr(multiplicative_replacement(df_taxa_all))\
@@ -247,8 +251,9 @@ for rank in ranks:
             print("10 most abundant taxa in total rna-seq:")
             print(df_taxa_rna.sum().sort_values(ascending=False).head(n=15))
             ## Taxa abundance distribution
-            px.histogram(df_taxa_dna.sum(), title = "Taxa abundance distribution metagenomics").show()
-            px.histogram(df_taxa_rna.sum(), title = "Taxa abundance distribution total rna-seq").show()
+            if plots==True:
+                px.histogram(df_taxa_dna.sum(), title = "Taxa abundance distribution metagenomics").show()
+                px.histogram(df_taxa_rna.sum(), title = "Taxa abundance distribution total rna-seq").show()
 
             # Standardize data
             df_taxa_all = pd.DataFrame(StandardScaler().fit_transform(df_taxa_all), index=df_taxa_all.index, columns=df_taxa_all.columns)
@@ -270,8 +275,9 @@ for rank in ranks:
             print("10 most present taxa in total rna-seq:")
             print(df_taxa_rna.sum().sort_values(ascending=False).head(n=15))
             ### Taxa presence distribution
-            px.histogram(df_taxa_dna.sum(), title = "Taxa presence distribution metagenomics").show()
-            px.histogram(df_taxa_rna.sum(), title = "Taxa presence distribution total rna-seq").show()
+            if plots==True:
+                px.histogram(df_taxa_dna.sum(), title = "Taxa presence distribution metagenomics").show()
+                px.histogram(df_taxa_rna.sum(), title = "Taxa presence distribution total rna-seq").show()
 
 
         # Run everything for both metagenomics and total rna-seq:
@@ -285,7 +291,7 @@ for rank in ranks:
                 df_vars = df_vars_rna
 
             # Define independent and dependent variables
-            X = df_taxa.iloc[:, :5]
+            X = df_taxa
             y = df_vars[dependent_variable]
             feature_names = df_taxa.columns
 
@@ -492,7 +498,7 @@ for rank in ranks:
                         'intercept_scaling': np.linspace(0.5, 1.5, 10),
                         'solver': ['newton-cg','lbfgs', 'sag', 'saga']}
                     # Define model
-                    lor_ridge_model = LogisticRegression(penalty = "l2", random_state=random_state, max_iter=10000000000)
+                    lor_ridge_model = LogisticRegression(penalty = "l2", random_state=random_state, max_iter=2147483647)
                     lor_ridge_bayes_search = BayesSearchCV(lor_ridge_model,
                            lor_ridge_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
                     ## Save best mean MCC
@@ -516,7 +522,7 @@ for rank in ranks:
                     lor_lasso_param_dic = {'tol': [1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
                         'C': np.linspace(0.5, 1.5, 10),
                         'intercept_scaling': np.linspace(0.5, 1.5, 10)}
-                    lor_lasso_model = LogisticRegression(penalty = "l1", solver = 'liblinear', random_state=random_state, max_iter=10000000000)
+                    lor_lasso_model = LogisticRegression(penalty = "l1", solver = 'liblinear', random_state=random_state, max_iter=2147483647)
                     lor_lasso_bayes_search = BayesSearchCV(lor_lasso_model,
                            lor_lasso_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
                     ## Save best mean MCC
@@ -537,13 +543,13 @@ for rank in ranks:
 
                 if model == "mlp":
                     ### MLP #4 priority
-                    mlp_param_dic = {'hidden_layer_sizes': [round(x) for x in np.linspace(100, len(X_train.columns), 10)],
+                    mlp_param_dic = {'hidden_layer_sizes': list(set([round(x) for x in np.linspace(len(X_train), len(X_train.columns), 10)])),
                         'activation': ['tanh', 'relu', 'logistic', 'identity'],
                         'solver': ['sgd', 'adam', 'lbfgs'],
                         'alpha': [1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
                         'learning_rate': ['constant','adaptive', 'invscaling']}
                     # Define model
-                    mlp_model = MLPClassifier(random_state=random_state, max_iter=10000000000)
+                    mlp_model = MLPClassifier(random_state=random_state, max_iter=2147483647)
                     mlp_bayes_search = BayesSearchCV(mlp_model,
                            mlp_param_dic, scoring=make_scorer(matthews_corrcoef), n_jobs=-1, cv=10).fit(X_train, y_train)
                     ## Save best mean MCC
