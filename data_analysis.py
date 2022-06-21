@@ -132,81 +132,217 @@ if not os.path.exists(lcdir):
 # Loop over ranks
 counter = 1
 for rank in ranks:
-
+    print("--------------- Rank: {0} ----------------".format(rank))
     # Read in data
     abundances = pd.read_csv(os.path.join(workdir, "abundances_" + rank + ".csv"))
     abundances["taxon"] = abundances["taxon"].fillna("NA")
     abundances = abundances.set_index("taxon")
     abundances.index.name = None
-    abundances = abundances.transpose().reset_index().rename(columns={"index":'sample'})
+    abundances = abundances.transpose()
+
+    df_16s_esv = pd.read_parquet(os.path.join(workdir, "Cotton_16S_apscale_ESV_table_filtered_tax_clean.parquet.snappy"))
+    df_its_esv = pd.read_parquet(os.path.join(workdir, "Cotton_ITS_apscale_ESV_table_filtered_tax_clean.parquet.snappy"))
+    df_16s_otu = pd.read_parquet(os.path.join(workdir, "Cotton_16S_apscale_OTU_table_filtered_tax_clean.parquet.snappy"))
+    df_its_otu = pd.read_parquet(os.path.join(workdir, "Cotton_ITS_apscale_OTU_table_filtered_tax_clean.parquet.snappy"))
+
+    ## Filter taxa names
+    df_16s_esv = df_16s_esv.replace("^.__", "", regex=True).replace("unidentified", "NA").fillna("NA")
+    df_its_esv = df_its_esv.replace("^.__", "", regex=True).replace("unidentified", "NA").fillna("NA")
+    df_16s_otu = df_16s_otu.replace("^.__", "", regex=True).replace("unidentified", "NA").fillna("NA")
+    df_its_otu = df_its_otu.replace("^.__", "", regex=True).replace("unidentified", "NA").fillna("NA")
+
+    ## Make proper species names
+    df_16s_esv["Species"] = df_16s_esv["Genus"] + " " + df_16s_esv["Species"]
+    df_its_esv["Species"] = df_its_esv["Genus"] + " " + df_its_esv["Species"]
+    df_16s_otu["Species"] = df_16s_otu["Genus"] + " " + df_16s_otu["Species"]
+    df_its_otu["Species"] = df_its_otu["Genus"] + " " + df_its_otu["Species"]
+
+    df_16s_esv["Species"] = df_16s_esv["Species"].replace(".* NA", "NA", regex=True)
+    df_its_esv["Species"] = df_its_esv["Species"].replace(".* NA", "NA", regex=True)
+    df_16s_otu["Species"] = df_16s_otu["Species"].replace(".* NA", "NA", regex=True)
+    df_its_otu["Species"] = df_its_otu["Species"].replace(".* NA", "NA", regex=True)
+
+    ## Aggregate on rank
+    df_16s_esv = df_16s_esv.iloc[:, list(df_16s_esv.columns).index(rank.capitalize()):].groupby([rank.capitalize()]).sum()
+    df_its_esv = df_its_esv.iloc[:, list(df_its_esv.columns).index(rank.capitalize()):].groupby([rank.capitalize()]).sum()
+    df_16s_otu = df_16s_otu.iloc[:, list(df_16s_otu.columns).index(rank.capitalize()):].groupby([rank.capitalize()]).sum()
+    df_its_otu = df_its_otu.iloc[:, list(df_its_otu.columns).index(rank.capitalize()):].groupby([rank.capitalize()]).sum()
+
+    ## Transform to relative
+    df_16s_esv = df_16s_esv/df_16s_esv.sum()
+    df_its_esv = df_its_esv/df_its_esv.sum()
+    df_16s_otu = df_16s_otu/df_16s_otu.sum()
+    df_its_otu = df_its_otu/df_its_otu.sum()
+
+    ## Prepare for merge with sample info
+    df_16s_esv.index.name = None
+    df_16s_esv = df_16s_esv.transpose().reset_index().rename(columns={"index":'sample'})
+    df_its_esv.index.name = None
+    df_its_esv = df_its_esv.transpose().reset_index().rename(columns={"index":'sample'})
+    df_16s_otu.index.name = None
+    df_16s_otu = df_16s_otu.transpose().reset_index().rename(columns={"index":'sample'})
+    df_its_otu.index.name = None
+    df_its_otu = df_its_otu.transpose().reset_index().rename(columns={"index":'sample'})
+
+
+    # Drop NAs:
+    print("Average NA abundance per metagenomics sample: {0}% (mean), {1}% (median)"\
+        .format(round(100*abundances[abundances.index.str.contains('DNA')]["NA"].mean(), 2), \
+        round(100*abundances[abundances.index.str.contains('DNA')]["NA"].median(), 2)))
+    print("Average NA abundance per total rna-seq sample: {0}% (mean), {1}% (median)"\
+        .format(round(100*abundances[abundances.index.str.contains('RNA')]["NA"].mean(), 2), \
+        round(100*abundances[abundances.index.str.contains('RNA')]["NA"].median(), 2)))
+    print("Average NA abundance per 16S ESV sample: {0}% (mean), {1}% (median)"\
+        .format(round(100*df_16s_esv["NA"].mean(), 2), \
+        round(100*df_16s_esv["NA"].median(), 2)))
+    print("Average NA abundance per ITS ESV sample: {0}% (mean), {1}% (median)"\
+        .format(round(100*df_its_esv["NA"].mean(), 2), \
+        round(100*df_its_esv["NA"].median(), 2)))
+    print("Average NA abundance per 16S OTU sample: {0}% (mean), {1}% (median)"\
+        .format(round(100*df_16s_otu["NA"].mean(), 2), \
+        round(100*df_16s_otu["NA"].median(), 2)))
+    print("Average NA abundance per ITS OTU sample: {0}% (mean), {1}% (median)"\
+        .format(round(100*df_its_otu["NA"].mean(), 2), \
+        round(100*df_its_otu["NA"].median(), 2)))
+    abundances = abundances.drop(["NA"], axis = 1)
+    df_16s_esv = df_16s_esv.drop(["NA"], axis = 1)
+    df_its_esv = df_its_esv.drop(["NA"], axis = 1)
+    df_16s_otu = df_16s_otu.drop(["NA"], axis = 1)
+    df_its_otu = df_its_otu.drop(["NA"], axis = 1)
+
+    ## In the case that all taxa of a sample are NA, the sample has a sum of 0, so we
+    ## have to drop all those samples
+    abundances = abundances.loc[(abundances.sum(axis=1) != 0), :]
+    df_16s_esv = df_16s_esv.loc[(df_16s_esv.sum(axis=1) != 0), :]
+    df_its_esv = df_its_esv.loc[(df_its_esv.sum(axis=1) != 0), :]
+    df_16s_otu = df_16s_otu.loc[(df_16s_otu.sum(axis=1) != 0), :]
+    df_its_otu = df_its_otu.loc[(df_its_otu.sum(axis=1) != 0), :]
+
+    ## Turn metagenomics and total rna seq coverages back into relative so that their sum equals 1
+    abundances = (abundances.transpose()/abundances.transpose().sum()).transpose().reset_index().rename(columns={"index":'sample'})
+
+    # Merge sample info
     sample_info = pd.read_csv(sample_info_file)
-    ## Edit sample column
+    df_16s_esv = pd.merge(df_16s_esv, sample_info, how='inner').set_index("sample")
+    df_its_esv = pd.merge(df_its_esv, sample_info, how='inner').set_index("sample")
+    df_16s_otu = pd.merge(df_16s_otu, sample_info, how='inner').set_index("sample")
+    df_its_otu = pd.merge(df_its_otu, sample_info, how='inner').set_index("sample")
+    df_16s_esv.index.name = None
+    df_its_esv.index.name = None
+    df_16s_otu.index.name = None
+    df_its_otu.index.name = None
+
+    ## Edit sample column for metagenomcis total rnaseq samples
     sample_info["sample"] = sample_info["sample"].str.lstrip('0').str.upper()
     sample_info_dna = copy.deepcopy(sample_info)
     sample_info_dna["sample"] = sample_info_dna["sample"] + "_DNA"
     sample_info_rna = copy.deepcopy(sample_info)
     sample_info_rna["sample"] = sample_info_rna["sample"] + "_RNA"
     sample_info = pd.concat([sample_info_dna, sample_info_rna])
+    df_dna_rna = pd.merge(abundances, sample_info, how='inner').set_index("sample")
+    df_dna_rna.index.name = None
 
+    ## Adapt sample names for metabarcoding samples
+    df_16s_esv.index = df_16s_esv.index.str.replace(r'^0', '').str.upper()
+    df_its_esv.index = df_its_esv.index.str.replace(r'^0', '').str.upper()
+    df_16s_otu.index = df_16s_otu.index.str.replace(r'^0', '').str.upper()
+    df_its_otu.index = df_its_otu.index.str.replace(r'^0', '').str.upper()
+    df_16s_esv.index += '_16S-ESV'
+    df_its_esv.index += '_ITS-ESV'
+    df_16s_otu.index += '_16S-OTU'
+    df_its_otu.index += '_ITS-OTU'
 
-    # Drop NAs:
-    print("Average NA abundance per sample: {0}% (mean), {1}% (median)".format(round(100*abundances["NA"]\
-        .mean(), 2), round(100*abundances["NA"].median(), 2)))
-    print("Average NA abundance per metagenomics sample: {0}% (mean), {1}% (median)"\
-        .format(round(100*abundances[abundances['sample'].str.contains('DNA')]["NA"].mean(), 2), \
-        round(100*abundances[abundances['sample'].str.contains('DNA')]["NA"].median(), 2)))
-    print("Average NA abundance per total rna-seq sample: {0}% (mean), {1}% (median)"\
-        .format(round(100*abundances[abundances['sample'].str.contains('RNA')]["NA"].mean(), 2), \
-        round(100*abundances[abundances['sample'].str.contains('RNA')]["NA"].median(), 2)))
-    abundances = abundances.drop(["NA"], axis = 1).set_index('sample')
-    ## In the case that all taxa of a sample are NA, the sample has a sum of 0, so we
-    ## have to drop all those samples
-    abundances = abundances.loc[(abundances.sum(axis=1) != 0), :]
-    ## Turn coverages back into relative so that their sum equals 1
-    abundances = (abundances.transpose()/abundances.transpose().sum()).transpose().reset_index()
-
-    # Merge info
-    df = pd.merge(abundances, sample_info, how='inner')
-    df = df.set_index("sample")
-    df.index.name = None
+    # Some models don't work if feature names contain "[" and "]", so we have to remove the characters
+    df_dna_rna.columns = [x.replace('[', '').replace(']', '') for x in df_dna_rna.columns]
+    df_16s_esv.columns = [x.replace('[', '').replace(']', '') for x in df_16s_esv.columns]
+    df_its_esv.columns = [x.replace('[', '').replace(']', '') for x in df_its_esv.columns]
+    df_16s_otu.columns = [x.replace('[', '').replace(']', '') for x in df_16s_otu.columns]
+    df_its_otu.columns = [x.replace('[', '').replace(']', '') for x in df_its_otu.columns]
 
     # Add  column for sequencing type and combination of pesticide
     # treatment and sediment addition
-    df["seq_type"] = df.index.str.contains("DNA")
-    df['seq_type'] = df['seq_type'].map({True: 'metagenomics', False: 'total_rnaseq'})
-    # Change sediment yes to with (w) sediment and sediment no to without (wo) sediment
-    df['sediment_addition'] = df['sediment_addition'].map({"yes": 'w_sediment', "no": 'wo_sediment'})
-    df['pesticide_and_sediment'] = df["pestidice_treatment"] + "_" + df["sediment_addition"]
+    df_dna_rna["seq_type"] = df_dna_rna.index.str.contains("DNA")
+    df_dna_rna['seq_type'] = df_dna_rna['seq_type'].map({True: 'metagenomics', False: 'total_rnaseq'})
+    ## Change sediment yes to with (w) sediment and sediment no to without (wo) sediment
+    df_dna_rna['sediment_addition'] = df_dna_rna['sediment_addition'].map({"yes": 'w_sediment', "no": 'wo_sediment'})
+    df_16s_esv['sediment_addition'] = df_16s_esv['sediment_addition'].map({"yes": 'w_sediment', "no": 'wo_sediment'})
+    df_its_esv['sediment_addition'] = df_its_esv['sediment_addition'].map({"yes": 'w_sediment', "no": 'wo_sediment'})
+    df_16s_otu['sediment_addition'] = df_16s_otu['sediment_addition'].map({"yes": 'w_sediment', "no": 'wo_sediment'})
+    df_its_otu['sediment_addition'] = df_its_otu['sediment_addition'].map({"yes": 'w_sediment', "no": 'wo_sediment'})
+    ## Make new feature
+    df_dna_rna['pesticide_and_sediment'] = df_dna_rna["pestidice_treatment"] + "_" + df_dna_rna["sediment_addition"]
+    df_16s_esv['pesticide_and_sediment'] = df_16s_esv["pestidice_treatment"] + "_" + df_16s_esv["sediment_addition"]
+    df_its_esv['pesticide_and_sediment'] = df_its_esv["pestidice_treatment"] + "_" + df_its_esv["sediment_addition"]
+    df_16s_otu['pesticide_and_sediment'] = df_16s_otu["pestidice_treatment"] + "_" + df_16s_otu["sediment_addition"]
+    df_its_otu['pesticide_and_sediment'] = df_its_otu["pestidice_treatment"] + "_" + df_its_otu["sediment_addition"]
 
     # Separation
     df_dna = df[df['seq_type']=="metagenomics"]
     df_rna = df[df['seq_type']=="total_rnaseq"]
-    df_taxa_all = df.drop(["pestidice_treatment", "sediment_addition", "seq_type", "pesticide_and_sediment"], axis=1)
+    ## Cut dfs down to shared samples (some only worked in metagenomics or total rna-seq)
+    ### Identify shared samples
+    shared_samples = list(set(df_dna.index.str.replace("_DNA", "")) & set(df_rna.index.str.replace("_RNA", "")))
+    shared_samples_dna = [x + "_DNA" for x in shared_samples]
+    shared_samples_rna = [x + "_RNA" for x in shared_samples]
+    shared_samples_16s_esv = [x + "_16S-ESV" for x in shared_samples]
+    shared_samples_its_esv = [x + "_ITS-ESV" for x in shared_samples]
+    shared_samples_16s_otu = [x + "_16S-OTU" for x in shared_samples]
+    shared_samples_its_otu = [x + "_ITS-OTU" for x in shared_samples]
+
+    ### Subset
+    df_dna = df_dna.loc[shared_samples_dna]
+    df_rna = df_rna.loc[shared_samples_rna]
+    df_dna_rna = df_dna_rna.loc[shared_samples_dna + shared_samples_rna]
+    df_16s_esv = df_16s_esv.loc[shared_samples_16s_esv]
+    df_its_esv = df_its_esv.loc[shared_samples_its_esv]
+    df_16s_otu = df_16s_otu.loc[shared_samples_16s_otu]
+    df_its_otu = df_its_otu.loc[shared_samples_its_otu]
+
+    ### Split into taxa and vars
+    df_taxa_dna_rna = df_dna_rna.drop(["pestidice_treatment", "sediment_addition", "seq_type", "pesticide_and_sediment"], axis=1)
     df_taxa_dna = df_dna.drop(["pestidice_treatment", "sediment_addition", "seq_type", "pesticide_and_sediment"], axis=1)
     df_taxa_rna = df_rna.drop(["pestidice_treatment", "sediment_addition", "seq_type", "pesticide_and_sediment"], axis=1)
-    df_vars_all = df[["pestidice_treatment", "sediment_addition", "seq_type", "pesticide_and_sediment"]]
+    df_taxa_16s_esv = df_16s_esv.drop(["pestidice_treatment", "sediment_addition", "pesticide_and_sediment"], axis=1)
+    df_taxa_its_esv = df_its_esv.drop(["pestidice_treatment", "sediment_addition", "pesticide_and_sediment"], axis=1)
+    df_taxa_16s_otu = df_16s_otu.drop(["pestidice_treatment", "sediment_addition", "pesticide_and_sediment"], axis=1)
+    df_taxa_its_otu = df_its_otu.drop(["pestidice_treatment", "sediment_addition", "pesticide_and_sediment"], axis=1)
+
+    df_vars_dna_rna = df_dna_rna[["pestidice_treatment", "sediment_addition", "seq_type", "pesticide_and_sediment"]]
     df_vars_dna = df_dna[["pestidice_treatment", "sediment_addition", "pesticide_and_sediment"]]
     df_vars_rna = df_rna[["pestidice_treatment", "sediment_addition", "pesticide_and_sediment"]]
-    ## Drop taxa in dna and rna dfs with total abundance = 0 (some only occur in either or)
+    df_vars_16s_esv = df_16s_esv[["pestidice_treatment", "sediment_addition", "pesticide_and_sediment"]]
+    df_vars_its_esv = df_its_esv[["pestidice_treatment", "sediment_addition", "pesticide_and_sediment"]]
+    df_vars_16s_otu = df_16s_otu[["pestidice_treatment", "sediment_addition", "pesticide_and_sediment"]]
+    df_vars_its_otu = df_its_otu[["pestidice_treatment", "sediment_addition", "pesticide_and_sediment"]]
+
+    ## Drop taxa in dfs with total abundance = 0
     df_taxa_dna = df_taxa_dna.loc[:, (df_taxa_dna.sum() != 0)]
     df_taxa_rna = df_taxa_rna.loc[:, (df_taxa_rna.sum() != 0)]
+    df_taxa_16s_esv = df_taxa_16s_esv.loc[:, (df_taxa_16s_esv.sum() != 0)]
+    df_taxa_its_esv = df_taxa_its_esv.loc[:, (df_taxa_its_esv.sum() != 0)]
+    df_taxa_16s_otu = df_taxa_16s_otu.loc[:, (df_taxa_16s_otu.sum() != 0)]
+    df_taxa_its_otu = df_taxa_its_otu.loc[:, (df_taxa_its_otu.sum() != 0)]
 
 
-    # Data exploration overall
-    ## Taxa overall
-    all_taxa = list(df_taxa_all.columns)
+    # Data exploration metagenomics and total RNA seq taxa
+    dna_rna_taxa = list(df_taxa_dna_rna.columns)
     dna_taxa = list(df_taxa_dna.columns)
     rna_taxa = list(df_taxa_rna.columns)
-    print("Number of taxa found overall: {0}".format(len(all_taxa)))
+    print("Number of taxa found overall: {0}".format(len(dna_rna_taxa)))
     print("Number of taxa found in metagenomics: {0}".format(len(dna_taxa)))
     print("Number of taxa found in total rna-seq: {0}".format(len(rna_taxa)))
     print("Number of taxa shared between metagenomics and total rna-seq: {0}".format(len([x for x in dna_taxa if x in rna_taxa])))
     print("Number of taxa unique to metagenomics: {0}".format(len([x for x in dna_taxa if x not in rna_taxa])))
     print("Number of taxa unique to total rna-seq: {0}".format(len([x for x in rna_taxa if x not in dna_taxa])))
+    # Data exploration metabarcoding taxa
+    print("Number of taxa found in 16s_esv: {0}".format(len(df_taxa_16s_esv.columns)))
+    print("Number of taxa found in its_esv: {0}".format(len(df_taxa_its_esv.columns)))
+    print("Number of taxa found in 16s_otu: {0}".format(len(df_taxa_16s_otu.columns)))
+    print("Number of taxa found in its_otu: {0}".format(len(df_taxa_its_otu.columns)))
+
     ## Dependent variable distribution
     if plots==True:
-        px.bar(df_vars_dna[dependent_variable].value_counts().sort_values(), orientation='h', title='class distribution {0} metagenomics'.format(dependent_variable))
-        px.bar(df_vars_rna[dependent_variable].value_counts().sort_values(), orientation='h', title='class distribution {0} total rna-seq'.format(dependent_variable))
+        px.bar(df_vars_dna[dependent_variable].value_counts().sort_values(), orientation='h', title='class distribution')
 
 
     # To later split the data into train and test data, some manual adjustments are required
@@ -218,77 +354,137 @@ for rank in ranks:
     # samples and use them later for the test dataset. Some samples failed for DNA or RNA,
     # so I need to identify which ones worked in both and pick randomly from those.
     ## Remove suffixes
-    sample_ponds_dna = df_taxa_dna.index.str.replace('[AB]_DNA', '')
-    sample_ponds_rna = df_taxa_rna.index.str.replace('[AB]_RNA', '')
+    sample_ponds = df_taxa_dna.index.str.replace('[AB]_DNA', '')
     ## Identify non-unique ponds (that worked for A and B)
-    non_unique_ponds_dna = [item for item, count in collections.Counter(sample_ponds_dna).items() if count == 2]
-    non_unique_ponds_rna = [item for item, count in collections.Counter(sample_ponds_rna).items() if count == 2]
-    ## Identify overlaps in RNA and DNA ponds
-    ponds = list(set(non_unique_ponds_dna) & set(non_unique_ponds_rna))
-    ## Randomly pick 6 ponds, NOTE: the ranodm seed line has to be run before every use
+    non_unique_ponds = [item for item, count in collections.Counter(sample_ponds).items() if count == 2]
+    ## Randomly pick 6 ponds, NOTE: the random seed line has to be run before every use
     ## of the random.sample method to generate reproducible results!
     random.seed(random_state)
-    test_ponds = random.sample(ponds, 6)
+    test_ponds = random.sample(non_unique_ponds, 6)
     # Check if same ponds are selected in every loop
     print("Test ponds:", test_ponds)
     # Run everything for both abundance and p-a data:
     data_types = ["abundance", "pa"]
     for data_type in data_types:
+        print("--------------- Data type: {0} ----------------".format(data_type))
         if data_type=="abundance":
             # Transform abundances by replacing 0s and taking the centered log ratio
-            df_taxa_all = pd.DataFrame(clr(multiplicative_replacement(df_taxa_all))\
-                , index=df_taxa_all.index, columns=df_taxa_all.columns)
+            df_taxa_dna_rna = pd.DataFrame(clr(multiplicative_replacement(df_taxa_dna_rna))\
+                , index=df_taxa_dna_rna.index, columns=df_taxa_dna_rna.columns)
             df_taxa_dna = pd.DataFrame(clr(multiplicative_replacement(df_taxa_dna))\
                 , index=df_taxa_dna.index, columns=df_taxa_dna.columns)
             df_taxa_rna = pd.DataFrame(clr(multiplicative_replacement(df_taxa_rna))\
                 , index=df_taxa_rna.index, columns=df_taxa_rna.columns)
+            df_taxa_16s_esv = pd.DataFrame(clr(multiplicative_replacement(df_taxa_16s_esv))\
+                , index=df_taxa_16s_esv.index, columns=df_taxa_16s_esv.columns)
+            df_taxa_its_esv = pd.DataFrame(clr(multiplicative_replacement(df_taxa_its_esv))\
+                , index=df_taxa_its_esv.index, columns=df_taxa_its_esv.columns)
+            df_taxa_16s_otu = pd.DataFrame(clr(multiplicative_replacement(df_taxa_16s_otu))\
+                , index=df_taxa_16s_otu.index, columns=df_taxa_16s_otu.columns)
+            df_taxa_its_otu = pd.DataFrame(clr(multiplicative_replacement(df_taxa_its_otu))\
+                , index=df_taxa_its_otu.index, columns=df_taxa_its_otu.columns)
+
             # Data exploration abundance
             ## Taxa abundance
-            print("10 most abundant taxa overall:")
-            print(df_taxa_all.sum().sort_values(ascending=False).head(n=15))
-            print("10 most abundant taxa in metagenomics:")
+            print("15 most abundant taxa in metagenomics:")
             print(df_taxa_dna.sum().sort_values(ascending=False).head(n=15))
-            print("10 most abundant taxa in total rna-seq:")
+            print("------------------------")
+            print("15 most abundant taxa in total rna-seq:")
             print(df_taxa_rna.sum().sort_values(ascending=False).head(n=15))
+            print("------------------------")
+            print("15 most abundant taxa in 16s_esv:")
+            print(df_taxa_16s_esv.sum().sort_values(ascending=False).head(n=15))
+            print("------------------------")
+            print("15 most abundant taxa in its_esv:")
+            print(df_taxa_its_esv.sum().sort_values(ascending=False).head(n=15))
+            print("------------------------")
+            print("15 most abundant taxa in 16s_otu:")
+            print(df_taxa_16s_otu.sum().sort_values(ascending=False).head(n=15))
+            print("------------------------")
+            print("15 most abundant taxa in its_otu:")
+            print(df_taxa_its_otu.sum().sort_values(ascending=False).head(n=15))
+
             ## Taxa abundance distribution
             if plots==True:
                 px.histogram(df_taxa_dna.sum(), title = "Taxa abundance distribution metagenomics").show()
                 px.histogram(df_taxa_rna.sum(), title = "Taxa abundance distribution total rna-seq").show()
+                px.histogram(df_taxa_16s_esv.sum(), title = "Taxa abundance distribution 16s_esv").show()
+                px.histogram(df_taxa_its_esv.sum(), title = "Taxa abundance distribution its_esv").show()
+                px.histogram(df_taxa_16s_otu.sum(), title = "Taxa abundance distribution 16s_otu").show()
+                px.histogram(df_taxa_its_otu.sum(), title = "Taxa abundance distribution its_otu").show()
 
             # Standardize data
-            df_taxa_all = pd.DataFrame(StandardScaler().fit_transform(df_taxa_all), index=df_taxa_all.index, columns=df_taxa_all.columns)
+            df_taxa_dna_rna = pd.DataFrame(StandardScaler().fit_transform(df_taxa_dna_rna), index=df_taxa_dna_rna.index, columns=df_taxa_dna_rna.columns)
             df_taxa_dna = pd.DataFrame(StandardScaler().fit_transform(df_taxa_dna), index=df_taxa_dna.index, columns=df_taxa_dna.columns)
             df_taxa_rna = pd.DataFrame(StandardScaler().fit_transform(df_taxa_rna), index=df_taxa_rna.index, columns=df_taxa_rna.columns)
+            df_taxa_16s_esv = pd.DataFrame(StandardScaler().fit_transform(df_taxa_16s_esv), index=df_taxa_16s_esv.index, columns=df_taxa_16s_esv.columns)
+            df_taxa_its_esv = pd.DataFrame(StandardScaler().fit_transform(df_taxa_its_esv), index=df_taxa_its_esv.index, columns=df_taxa_its_esv.columns)
+            df_taxa_16s_otu = pd.DataFrame(StandardScaler().fit_transform(df_taxa_16s_otu), index=df_taxa_16s_otu.index, columns=df_taxa_16s_otu.columns)
+            df_taxa_its_otu = pd.DataFrame(StandardScaler().fit_transform(df_taxa_its_otu), index=df_taxa_its_otu.index, columns=df_taxa_its_otu.columns)
 
         elif data_type=="pa":
             # Turn abundance data into presence/absence data (0=not found, 1=found():
             ## Replace all values above 0 with 1:
-            df_taxa_all[df_taxa_all > 0] = 1
+            df_taxa_dna_rna[df_taxa_dna_rna > 0] = 1
             df_taxa_dna[df_taxa_dna > 0] = 1
             df_taxa_rna[df_taxa_rna > 0] = 1
+            df_taxa_16s_esv[df_taxa_16s_esv > 0] = 1
+            df_taxa_its_esv[df_taxa_its_esv > 0] = 1
+            df_taxa_16s_otu[df_taxa_16s_otu > 0] = 1
+            df_taxa_its_otu[df_taxa_its_otu > 0] = 1
+
             # Data exploration pa
             ## Taxa pa
-            print("10 most present taxa overall:")
-            print(df_taxa_all.sum().sort_values(ascending=False).head(n=15))
-            print("10 most present taxa in metagenomics:")
+            print("15 most present taxa in metagenomics:")
             print(df_taxa_dna.sum().sort_values(ascending=False).head(n=15))
-            print("10 most present taxa in total rna-seq:")
+            print("------------------------")
+            print("15 most present taxa in total rna-seq:")
             print(df_taxa_rna.sum().sort_values(ascending=False).head(n=15))
+            print("------------------------")
+            print("15 most present taxa in 16s_esv:")
+            print(df_taxa_16s_esv.sum().sort_values(ascending=False).head(n=15))
+            print("------------------------")
+            print("15 most present taxa in its_esv:")
+            print(df_taxa_its_esv.sum().sort_values(ascending=False).head(n=15))
+            print("------------------------")
+            print("15 most present taxa in 16s_otu:")
+            print(df_taxa_16s_otu.sum().sort_values(ascending=False).head(n=15))
+            print("------------------------")
+            print("15 most present taxa in its_otu:")
+            print(df_taxa_its_otu.sum().sort_values(ascending=False).head(n=15))
             ### Taxa presence distribution
             if plots==True:
                 px.histogram(df_taxa_dna.sum(), title = "Taxa presence distribution metagenomics").show()
                 px.histogram(df_taxa_rna.sum(), title = "Taxa presence distribution total rna-seq").show()
+                px.histogram(df_taxa_16s_esv.sum(), title = "Taxa presence distribution 16s_esv").show()
+                px.histogram(df_taxa_its_esv.sum(), title = "Taxa presence distribution its_esv").show()
+                px.histogram(df_taxa_16s_otu.sum(), title = "Taxa presence distribution 16s_otu").show()
+                px.histogram(df_taxa_its_otu.sum(), title = "Taxa presence distribution its_otu").show()
 
 
         # Run everything for both metagenomics and total rna-seq:
-        seq_types = ["metagenomics", "totalrnaseq"]
+        seq_types = ["metagenomics", "totalrnaseq", "16s_esv", "its_esv", "16s_otu", "its_otu"]
         for seq_type in seq_types:
+            print("--------------- Sequencing type: {0} ----------------".format(seq_type))
             if seq_type=="metagenomics":
                 df_taxa = df_taxa_dna
                 df_vars = df_vars_dna
-            else:
+            elif seq_type=="totalrnaseq":
                 df_taxa = df_taxa_rna
                 df_vars = df_vars_rna
+            elif seq_type=="16s_esv":
+                df_taxa = df_taxa_16s_esv
+                df_vars = df_vars_16s_esv
+            elif seq_type=="its_esv":
+                df_taxa = df_taxa_its_esv
+                df_vars = df_vars_its_esv
+            elif seq_type=="16s_otu":
+                df_taxa = df_taxa_16s_otu
+                df_vars = df_vars_16s_otu
+            elif seq_type=="its_otu":
+                df_taxa = df_taxa_its_otu
+                df_vars = df_vars_its_otu
+
 
             # Define independent and dependent variables
             X = df_taxa
