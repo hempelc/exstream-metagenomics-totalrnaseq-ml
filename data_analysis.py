@@ -73,7 +73,7 @@ pca_perc = 0.5
 ## "knn" for KNN, "svc" for SVC, "lor-ridge" for logistic regression with ridge,
 ## "lor-lasso" for logistic regression with lasso, "mlp" for multilayer perceptron)
 #models = ["xgb", "lsvc", "knn", "svc", "rf", "lor-ridge", 'lor-lasso', 'mlp']
-models = ["xgb", "lsvc", "knn", "svc", "rf", "lor-ridge", 'lor-lasso', 'mlp']
+models = ["xgb", "lsvc", "knn", "svc", "rf", "lor-ridge", 'lor-lasso']
 # Set random state for models and pond selection during train test split
 random_state = 1
 ## Show plots generated during data exploration and feature selection? (True/False)
@@ -129,6 +129,9 @@ def plot_learning_curve2(estimator, title, X, y, ylim=None, cv=None,
     return pyplot
 
 
+time_print("Script done.")
+
+
 # This dict will contain all info
 master_dict = {}
 
@@ -140,7 +143,6 @@ if not os.path.exists(lcdir):
 # Loop over ranks
 counter = 1
 for rank in ranks:
-    rank="order"
     print("--------------- Rank: {0} ----------------".format(rank))
     # Read in data
     abundances = pd.read_csv(os.path.join(workdir, "abundances_" + rank + ".csv"))
@@ -353,7 +355,6 @@ for rank in ranks:
     if plots==True:
         px.bar(df_vars_dna[dependent_variable].value_counts().sort_values(), orientation='h', title='class distribution')
 
-
     # To later split the data into train and test data, some manual adjustments are required
     # due to the data structure. Therefore, I can't simply use the scikitlearn
     # train_test_split function later but rather have to manually select the test samples.
@@ -368,7 +369,6 @@ for rank in ranks:
     non_unique_ponds = [item for item, count in collections.Counter(sample_ponds).items() if count == 2]
 
     for data_type in data_types:
-        data_type="pa"
         print("--------------- Data type: {0} ----------------".format(data_type))
         if data_type=="abundance":
             # Transform abundances by replacing 0s and taking the centered log ratio
@@ -574,7 +574,7 @@ for rank in ranks:
 
 
 
-            # Repeat tests 5 times and take the average of the train and test
+            # Repeat tests 3 times and take the average of the train and test
             # values (needed due to big discrepancy between test and train)
 
             xgb_best_mean_mcc = []
@@ -595,7 +595,7 @@ for rank in ranks:
             lor_lasso_test_score_mcc = []
             mlp_test_score_mcc = []
 
-            for i in range(5):
+            for i in range(3):
 
                 ## Randomly pick 12 ponds
                 test_ponds = random.sample(non_unique_ponds, 12)
@@ -880,3 +880,5 @@ score_df["datatype"] = score_df.index.str.split("_").str[1]
 score_df["seqtype"] = score_df.index.str.split("_").str[2]
 score_df["model"] = score_df.index.str.split("_").str[3]
 score_df.to_csv(os.path.join(outdir, "score_df.csv"), index=False)
+
+time_print("Script done.")
