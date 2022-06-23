@@ -80,7 +80,8 @@ random_state = 1
 plots = False
 ## Calculate number of combos
 combo_num = len(ranks)*len(data_types)*len(seq_types)*len(models)
-
+## How many repetitions
+reps = 3
 
 # Define functions
 ## Print datetime and text
@@ -574,7 +575,7 @@ for rank in ranks:
 
 
 
-            # Repeat tests 3 times and take the average of the train and test
+            # Repeat tests "reps" times and take the average of the train and test
             # values (needed due to big discrepancy between test and train)
 
             xgb_best_mean_mcc = []
@@ -595,7 +596,7 @@ for rank in ranks:
             lor_lasso_test_score_mcc = []
             mlp_test_score_mcc = []
 
-            for i in range(3):
+            for i in range(reps):
 
                 ## Randomly pick 12 ponds
                 test_ponds = random.sample(non_unique_ponds, 12)
@@ -610,7 +611,7 @@ for rank in ranks:
                 # Run models
                 for model in models:
                     combo_name = "_".join([rank, data_type, seq_type, model])
-                    time_print("Processing combo {0}/{1}: {2} --- repetition {3}...".format(str(counter), str(combo_num*5), combo_name, i+1))
+                    time_print("Processing combo {0}/{1}: {2} --- repetition {3}...".format(str(counter), str(combo_num*reps), combo_name, i+1))
 
                     if model == "xgb":
                         # XGBoost #3 priority
