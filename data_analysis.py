@@ -230,8 +230,12 @@ for rank in ranks:
     df_16s_otu = df_16s_otu.loc[(df_16s_otu.sum(axis=1) != 0), :]
     df_its_otu = df_its_otu.loc[(df_its_otu.sum(axis=1) != 0), :]
 
-    ## Turn metagenomics and total rna seq coverages back into relative so that their sum equals 1
+    ## Turn abundances back into relative so that their sum equals 1 after NAs have been dropped
     abundances = (abundances.transpose()/abundances.transpose().sum()).transpose().reset_index().rename(columns={"index":'sample'})
+    df_16s_esv = (df_16s_esv.set_index('sample').transpose()/df_16s_esv.set_index('sample').transpose().sum()).transpose().reset_index().rename(columns={"index":'sample'})
+    df_its_esv = (df_its_esv.set_index('sample').transpose()/df_its_esv.set_index('sample').transpose().sum()).transpose().reset_index().rename(columns={"index":'sample'})
+    df_16s_otu = (df_16s_otu.set_index('sample').transpose()/df_16s_otu.set_index('sample').transpose().sum()).transpose().reset_index().rename(columns={"index":'sample'})
+    df_its_otu = (df_its_otu.set_index('sample').transpose()/df_its_otu.set_index('sample').transpose().sum()).transpose().reset_index().rename(columns={"index":'sample'})
 
     # Merge sample info
     sample_info = pd.read_csv(sample_info_file)
@@ -598,7 +602,12 @@ for rank in ranks:
 
             for i in range(reps):
 
-                ## Randomly pick 12 ponds
+                ## Randomly pick 12 ponds, NOTE: key here is setting seed to i!
+                ## By setting the seed to i, we make sure that no matter what
+                ## combinatin of data type, seq data, etc. we process, the
+                ## same test samples are used per repetition - otherwise results
+                ## would not be comparable between combinations!
+                random.seed(i)
                 test_ponds = random.sample(non_unique_ponds, 12)
                 print("Test ponds:", test_ponds)
 
