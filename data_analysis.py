@@ -55,7 +55,15 @@ ranks = ["phylum", "class", "order", "family", "genus", "species"]
 ## Data types to include into analysis (looped over) ["abundance", "pa"]
 data_types = ["abundance", "pa"]
 ## Seq types to include into analysis (looped over) ["metagenomics", "totalrnaseq", "16s_esv", "its_esv", "16s_otu", "its_otu"]
-seq_types = ["metagenomics", "totalrnaseq", "16s_esv", "its_esv", "16s_otu", "its_otu"]
+seq_types = ["metagenomics", "totalrnaseq", "16s-esv", "its-esv", "16s-otu", "its-otu"]
+## Select models you want to train
+## ("xbg" for XGBoosting, "lsvc" for linear SVC, "rf" for random forest,
+## "knn" for KNN, "svc" for SVC, "lor-ridge" for logistic regression with ridge,
+## "lor-lasso" for logistic regression with lasso, "mlp" for multilayer perceptron)
+#models = ["xgb", "lsvc", "knn", "svc", "rf", "lor-ridge", 'lor-lasso', 'mlp']
+models = ["xgb", "lsvc", "knn", "svc", "rf", "lor-ridge", 'lor-lasso']
+# Set random state for models and pond selection during train test split
+random_state = 1
 ## Set dependent variable ("pestidice_treatment", "sediment_addition", "pesticide_and_sediment")
 dependent_variable = "pesticide_and_sediment"
 ## Apply feature selection? (True/False)
@@ -68,14 +76,6 @@ selection_method = "rfe"
 dim_red = False
 ## If dimensionality reduction, choose % of variance that should be covered by PCs
 pca_perc = 0.5
-## Select models you want to train
-## ("xbg" for XGBoosting, "lsvc" for linear SVC, "rf" for random forest,
-## "knn" for KNN, "svc" for SVC, "lor-ridge" for logistic regression with ridge,
-## "lor-lasso" for logistic regression with lasso, "mlp" for multilayer perceptron)
-#models = ["xgb", "lsvc", "knn", "svc", "rf", "lor-ridge", 'lor-lasso', 'mlp']
-models = ["xgb", "lsvc", "knn", "svc", "rf", "lor-ridge", 'lor-lasso']
-# Set random state for models and pond selection during train test split
-random_state = 1
 ## Show plots generated during data exploration and feature selection? (True/False)
 plots = False
 ## Calculate number of combos
@@ -130,11 +130,12 @@ def plot_learning_curve2(estimator, title, X, y, ylim=None, cv=None,
     return pyplot
 
 
-time_print("Script done.")
+time_print("Script started.")
 
 
 # This dict will contain all info
-master_dict = {}
+master_score_dict = {}
+master_taxa_list_dic = {}
 
 ## Make output dir for learning curves
 lcdir = os.path.join(outdir, "learning_curves")
@@ -340,21 +341,29 @@ for rank in ranks:
     df_taxa_its_otu = df_taxa_its_otu.loc[:, (df_taxa_its_otu.sum() != 0)]
 
 
-    # Data exploration metagenomics and total RNA seq taxa
+    # Data exploration
     dna_rna_taxa = list(df_taxa_dna_rna.columns)
     dna_taxa = list(df_taxa_dna.columns)
     rna_taxa = list(df_taxa_rna.columns)
-    print("Number of taxa found overall: {0}".format(len(dna_rna_taxa)))
+    esv_16s_taxa = list(df_taxa_16s_esv.columns)
+    esv_its_taxa = list(df_taxa_its_esv.columns)
+    otu_16s_taxa = list(df_taxa_16s_otu.columns)
+    otu_its_taxa = list(df_taxa_its_otu.columns)
+
     print("Number of taxa found in metagenomics: {0}".format(len(dna_taxa)))
     print("Number of taxa found in total rna-seq: {0}".format(len(rna_taxa)))
     print("Number of taxa shared between metagenomics and total rna-seq: {0}".format(len([x for x in dna_taxa if x in rna_taxa])))
     print("Number of taxa unique to metagenomics: {0}".format(len([x for x in dna_taxa if x not in rna_taxa])))
     print("Number of taxa unique to total rna-seq: {0}".format(len([x for x in rna_taxa if x not in dna_taxa])))
-    # Data exploration metabarcoding taxa
-    print("Number of taxa found in 16s_esv: {0}".format(len(df_taxa_16s_esv.columns)))
-    print("Number of taxa found in its_esv: {0}".format(len(df_taxa_its_esv.columns)))
-    print("Number of taxa found in 16s_otu: {0}".format(len(df_taxa_16s_otu.columns)))
-    print("Number of taxa found in its_otu: {0}".format(len(df_taxa_its_otu.columns)))
+    print("Number of taxa found in 16s_esv: {0}".format(len(esv_16s_taxa)))
+    print("Number of taxa found in its_esv: {0}".format(len(esv_its_taxa)))
+    print("Number of taxa found in 16s_otu: {0}".format(len(otu_16s_taxa)))
+    print("Number of taxa found in its_otu: {0}".format(len(otu_its_taxa)))
+
+    ## Save in dict
+    taxa_list_dic = {"dna_taxa": dna_taxa, "rna_taxa": rna_taxa, "esv_16s_taxa": esv_16s_taxa,
+        "esv_its_taxa": esv_its_taxa, "otu_16s_taxa": otu_16s_taxa, "otu_its_taxa": otu_its_taxa}
+    master_taxa_list_dic[rank] = taxa_list_dic
 
     ## Dependent variable distribution
     if plots==True:
@@ -477,16 +486,16 @@ for rank in ranks:
             elif seq_type=="totalrnaseq":
                 df_taxa = df_taxa_rna
                 df_vars = df_vars_rna
-            elif seq_type=="16s_esv":
+            elif seq_type=="16s-esv":
                 df_taxa = df_taxa_16s_esv
                 df_vars = df_vars_16s_esv
-            elif seq_type=="its_esv":
+            elif seq_type=="its-esv":
                 df_taxa = df_taxa_its_esv
                 df_vars = df_vars_its_esv
-            elif seq_type=="16s_otu":
+            elif seq_type=="16s-otu":
                 df_taxa = df_taxa_16s_otu
                 df_vars = df_vars_16s_otu
-            elif seq_type=="its_otu":
+            elif seq_type=="its-otu":
                 df_taxa = df_taxa_its_otu
                 df_vars = df_vars_its_otu
 
@@ -822,7 +831,7 @@ for rank in ranks:
                     counter+=1
 
 
-            # Take mean and SD of results and add model results to master_dict
+            # Take mean and SD of results and add model results to master_score_dict
             r_d_s = "_".join([rank, data_type, seq_type])
 
             if "xgb" in models:
@@ -830,65 +839,69 @@ for rank in ranks:
                 xgb_train_mcc_sd = np.std(xgb_best_mean_mcc)
                 xgb_test_mcc_mean = sum(xgb_test_score_mcc)/len(xgb_test_score_mcc)
                 xgb_test_mcc_sd = np.std(xgb_test_score_mcc)
-                master_dict[r_d_s + "_xgb"]=[xgb_train_mcc_mean, xgb_train_mcc_sd, xgb_test_mcc_mean, xgb_test_mcc_sd]
+                master_score_dict[r_d_s + "_xgb"]=[xgb_train_mcc_mean, xgb_train_mcc_sd, xgb_test_mcc_mean, xgb_test_mcc_sd]
 
             if "lsvc" in models:
                 lsvc_train_mcc_mean = sum(lsvc_best_mean_mcc)/len(lsvc_best_mean_mcc)
                 lsvc_train_mcc_sd = np.std(lsvc_best_mean_mcc)
                 lsvc_test_mcc_mean = sum(lsvc_test_score_mcc)/len(lsvc_test_score_mcc)
                 lsvc_test_mcc_sd = np.std(lsvc_test_score_mcc)
-                master_dict[r_d_s + "_lsvc"]=[lsvc_train_mcc_mean, lsvc_train_mcc_sd, lsvc_test_mcc_mean, lsvc_test_mcc_sd]
+                master_score_dict[r_d_s + "_lsvc"]=[lsvc_train_mcc_mean, lsvc_train_mcc_sd, lsvc_test_mcc_mean, lsvc_test_mcc_sd]
 
             if "knn" in models:
                 knn_train_mcc_mean = sum(knn_best_mean_mcc)/len(knn_best_mean_mcc)
                 knn_train_mcc_sd = np.std(knn_best_mean_mcc)
                 knn_test_mcc_mean = sum(knn_test_score_mcc)/len(knn_test_score_mcc)
                 knn_test_mcc_sd = np.std(knn_test_score_mcc)
-                master_dict[r_d_s + "_knn"]=[knn_train_mcc_mean, knn_train_mcc_sd, knn_test_mcc_mean, knn_test_mcc_sd]
+                master_score_dict[r_d_s + "_knn"]=[knn_train_mcc_mean, knn_train_mcc_sd, knn_test_mcc_mean, knn_test_mcc_sd]
 
             if "svc" in models:
                 svc_train_mcc_mean = sum(svc_best_mean_mcc)/len(svc_best_mean_mcc)
                 svc_train_mcc_sd = np.std(svc_best_mean_mcc)
                 svc_test_mcc_mean = sum(svc_test_score_mcc)/len(svc_test_score_mcc)
                 svc_test_mcc_sd = np.std(svc_test_score_mcc)
-                master_dict[r_d_s + "_svc"]=[svc_train_mcc_mean, svc_train_mcc_sd, svc_test_mcc_mean, svc_test_mcc_sd]
+                master_score_dict[r_d_s + "_svc"]=[svc_train_mcc_mean, svc_train_mcc_sd, svc_test_mcc_mean, svc_test_mcc_sd]
 
             if "rf" in models:
                 rf_train_mcc_mean = sum(rf_best_mean_mcc)/len(rf_best_mean_mcc)
                 rf_train_mcc_sd = np.std(rf_best_mean_mcc)
                 rf_test_mcc_mean = sum(rf_test_score_mcc)/len(rf_test_score_mcc)
                 rf_test_mcc_sd = np.std(rf_test_score_mcc)
-                master_dict[r_d_s + "_rf"]=[rf_train_mcc_mean, rf_train_mcc_sd, rf_test_mcc_mean, rf_test_mcc_sd]
+                master_score_dict[r_d_s + "_rf"]=[rf_train_mcc_mean, rf_train_mcc_sd, rf_test_mcc_mean, rf_test_mcc_sd]
 
             if "lor-ridge" in models:
                 lor_ridge_train_mcc_mean = sum(lor_ridge_best_mean_mcc)/len(lor_ridge_best_mean_mcc)
                 lor_ridge_train_mcc_sd = np.std(lor_ridge_best_mean_mcc)
                 lor_ridge_test_mcc_mean = sum(lor_ridge_test_score_mcc)/len(lor_ridge_test_score_mcc)
                 lor_ridge_test_mcc_sd = np.std(lor_ridge_test_score_mcc)
-                master_dict[r_d_s + "_lor-ridge"]=[lor_ridge_train_mcc_mean, lor_ridge_train_mcc_sd, lor_ridge_test_mcc_mean, lor_ridge_test_mcc_sd]
+                master_score_dict[r_d_s + "_lor-ridge"]=[lor_ridge_train_mcc_mean, lor_ridge_train_mcc_sd, lor_ridge_test_mcc_mean, lor_ridge_test_mcc_sd]
 
             if "lor-lasso" in models:
                 lor_lasso_train_mcc_mean = sum(lor_lasso_best_mean_mcc)/len(lor_lasso_best_mean_mcc)
                 lor_lasso_train_mcc_sd = np.std(lor_lasso_best_mean_mcc)
                 lor_lasso_test_mcc_mean = sum(lor_lasso_test_score_mcc)/len(lor_lasso_test_score_mcc)
                 lor_lasso_test_mcc_sd = np.std(lor_lasso_test_score_mcc)
-                master_dict[r_d_s + "_lor-lasso"]=[lor_lasso_train_mcc_mean, lor_lasso_train_mcc_sd, lor_lasso_test_mcc_mean, lor_lasso_test_mcc_sd]
+                master_score_dict[r_d_s + "_lor-lasso"]=[lor_lasso_train_mcc_mean, lor_lasso_train_mcc_sd, lor_lasso_test_mcc_mean, lor_lasso_test_mcc_sd]
 
             if "mlp" in models:
                 mlp_train_mcc_mean = sum(mlp_best_mean_mcc)/len(mlp_best_mean_mcc)
                 mlp_train_mcc_sd = np.std(mlp_best_mean_mcc)
                 mlp_test_mcc_mean = sum(mlp_test_score_mcc)/len(mlp_test_score_mcc)
                 mlp_test_mcc_sd = np.std(mlp_test_score_mcc)
-                master_dict[r_d_s + "_mlp"]=[mlp_train_mcc_mean, mlp_train_mcc_sd, mlp_test_mcc_mean, mlp_test_mcc_sd]
+                master_score_dict[r_d_s + "_mlp"]=[mlp_train_mcc_mean, mlp_train_mcc_sd, mlp_test_mcc_mean, mlp_test_mcc_sd]
 
 
 # Turn the master df into df and save
-score_df = pd.DataFrame(master_dict).transpose()
+score_df = pd.DataFrame(master_score_dict).transpose()
 score_df.columns = ["train_mcc_mean", "train_mcc_sd", "test_mcc_mean", "test_mcc_sd"]
 score_df["rank"] = score_df.index.str.split("_").str[0]
 score_df["datatype"] = score_df.index.str.split("_").str[1]
 score_df["seqtype"] = score_df.index.str.split("_").str[2]
 score_df["model"] = score_df.index.str.split("_").str[3]
 score_df.to_csv(os.path.join(outdir, "score_df.csv"), index=False)
+
+# Save taxa lists
+with open(os.path.join(outdir, "taxa_lists.pickle"), 'wb') as handle:
+    pickle.dump(master_taxa_list_dic, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 time_print("Script done.")
