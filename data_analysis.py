@@ -54,8 +54,8 @@ sample_info_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream proje
 ranks = ["phylum", "class", "order", "family", "genus", "species"]
 ## Data types to include into analysis (looped over) ["abundance", "pa"]
 data_types = ["abundance", "pa"]
-## Seq types to include into analysis (looped over) ["metagenomics", "totalrnaseq", "16s_esv", "its_esv", "16s_otu", "its_otu"]
-seq_types = ["metagenomics", "totalrnaseq", "16s-esv", "its-esv", "16s-otu", "its-otu"]
+## Seq types to include into analysis (looped over) ["metagenomics", "totalrnaseq", "16s-esv", "its-esv", "16s-otu", "its-otu", "16s-its-otu", "16s-its-esv"]
+seq_types = ["metagenomics", "totalrnaseq", "16s-esv", "its-esv", "16s-otu", "its-otu", "16s-its-otu", "16s-its-esv"]
 ## Select models you want to train
 ## ("xbg" for XGBoosting, "lsvc" for linear SVC, "rf" for random forest,
 ## "knn" for KNN, "svc" for SVC, "lor-ridge" for logistic regression with ridge,
@@ -430,14 +430,10 @@ for rank in ranks:
                 px.histogram(df_taxa_16s_otu.sum(), title = "Taxa abundance distribution 16s_otu").show()
                 px.histogram(df_taxa_its_otu.sum(), title = "Taxa abundance distribution its_otu").show()
 
-            # Standardize data
+            # Standardize metagenomics and total RNA-Seq data
             df_taxa_dna_rna = pd.DataFrame(StandardScaler().fit_transform(df_taxa_dna_rna), index=df_taxa_dna_rna.index, columns=df_taxa_dna_rna.columns)
             df_taxa_dna = pd.DataFrame(StandardScaler().fit_transform(df_taxa_dna), index=df_taxa_dna.index, columns=df_taxa_dna.columns)
             df_taxa_rna = pd.DataFrame(StandardScaler().fit_transform(df_taxa_rna), index=df_taxa_rna.index, columns=df_taxa_rna.columns)
-            df_taxa_16s_esv = pd.DataFrame(StandardScaler().fit_transform(df_taxa_16s_esv), index=df_taxa_16s_esv.index, columns=df_taxa_16s_esv.columns)
-            df_taxa_its_esv = pd.DataFrame(StandardScaler().fit_transform(df_taxa_its_esv), index=df_taxa_its_esv.index, columns=df_taxa_its_esv.columns)
-            df_taxa_16s_otu = pd.DataFrame(StandardScaler().fit_transform(df_taxa_16s_otu), index=df_taxa_16s_otu.index, columns=df_taxa_16s_otu.columns)
-            df_taxa_its_otu = pd.DataFrame(StandardScaler().fit_transform(df_taxa_its_otu), index=df_taxa_its_otu.index, columns=df_taxa_its_otu.columns)
 
         elif data_type=="pa":
             # Turn abundance data into presence/absence data (0=not found, 1=found():
@@ -478,6 +474,26 @@ for rank in ranks:
                 px.histogram(df_taxa_16s_otu.sum(), title = "Taxa presence distribution 16s_otu").show()
                 px.histogram(df_taxa_its_otu.sum(), title = "Taxa presence distribution its_otu").show()
 
+        ## If multi-marker approach tested, combine dataframes of markers
+        if "16s-its-esv" in seq_types:
+            df_taxa_16s_its_esv = pd.concat([df_taxa_16s_esv.reset_index().drop("index", axis=1), df_taxa_its_esv.reset_index().drop("index", axis=1)], axis=1)
+            df_vars_16s_its_esv = df_vars_16s_esv.reset_index().drop("index", axis=1)
+
+        if "16s-its-otu" in seq_types:
+            df_taxa_16s_its_otu = pd.concat([df_taxa_16s_otu.reset_index().drop("index", axis=1), df_taxa_its_otu.reset_index().drop("index", axis=1)], axis=1)
+            df_vars_16s_its_otu = df_vars_16s_otu.reset_index().drop("index", axis=1)
+
+        ## Standardize amplicon sequencing data if abundance (Note: done after multi-marker combination since StandardScaler has to be applied to all features collectively)
+        if data_type=="abundance":
+            df_taxa_16s_esv = pd.DataFrame(StandardScaler().fit_transform(df_taxa_16s_esv), index=df_taxa_16s_esv.index, columns=df_taxa_16s_esv.columns)
+            df_taxa_its_esv = pd.DataFrame(StandardScaler().fit_transform(df_taxa_its_esv), index=df_taxa_its_esv.index, columns=df_taxa_its_esv.columns)
+            df_taxa_16s_otu = pd.DataFrame(StandardScaler().fit_transform(df_taxa_16s_otu), index=df_taxa_16s_otu.index, columns=df_taxa_16s_otu.columns)
+            df_taxa_its_otu = pd.DataFrame(StandardScaler().fit_transform(df_taxa_its_otu), index=df_taxa_its_otu.index, columns=df_taxa_its_otu.columns)
+            if "16s-its-esv" in seq_types:
+                df_taxa_16s_its_esv = pd.DataFrame(StandardScaler().fit_transform(df_taxa_16s_its_esv), index=df_taxa_16s_its_esv.index, columns=df_taxa_16s_its_esv.columns)
+            if "16s-its-otu" in seq_types:
+                df_taxa_16s_its_otu = pd.DataFrame(StandardScaler().fit_transform(df_taxa_16s_its_otu), index=df_taxa_16s_its_otu.index, columns=df_taxa_16s_its_otu.columns)
+
         for seq_type in seq_types:
             print("--------------- Sequencing type: {0} ----------------".format(seq_type))
             if seq_type=="metagenomics":
@@ -498,6 +514,12 @@ for rank in ranks:
             elif seq_type=="its-otu":
                 df_taxa = df_taxa_its_otu
                 df_vars = df_vars_its_otu
+            elif seq_type=="16s-its-esv":
+                df_taxa = df_taxa_16s_its_esv
+                df_vars = df_vars_16s_its_esv
+            elif seq_type=="16s-its-otu":
+                df_taxa = df_taxa_16s_its_otu
+                df_vars = df_vars_16s_its_otu
 
             # Define independent and dependent variables
             X = df_taxa
@@ -514,6 +536,9 @@ for rank in ranks:
 
             if f_select == True:
                 # Feature selection
+                ## Naming for later
+                f_select_naming = 'w-fs'
+
                 if selection_method=="lasso":
                     ## Via Lasso
                     selector = feature_selection.SelectFromModel(estimator=LogisticRegression(C=1, penalty="l1",
@@ -572,6 +597,9 @@ for rank in ranks:
 
                 ## Select features
                 X = X[reduced_feature_names]
+            else:
+                ## Naming for later
+                f_select_naming = 'wo-fs'
 
 
             if dim_red == True:
@@ -832,63 +860,63 @@ for rank in ranks:
 
 
             # Take mean and SD of results and add model results to master_score_dict
-            r_d_s = "_".join([rank, data_type, seq_type])
+            r_d_s_f = "_".join([rank, data_type, seq_type, f_select_naming])
 
             if "xgb" in models:
                 xgb_train_mcc_mean = sum(xgb_best_mean_mcc)/len(xgb_best_mean_mcc)
                 xgb_train_mcc_sd = np.std(xgb_best_mean_mcc)
                 xgb_test_mcc_mean = sum(xgb_test_score_mcc)/len(xgb_test_score_mcc)
                 xgb_test_mcc_sd = np.std(xgb_test_score_mcc)
-                master_score_dict[r_d_s + "_xgb"]=[xgb_train_mcc_mean, xgb_train_mcc_sd, xgb_test_mcc_mean, xgb_test_mcc_sd]
+                master_score_dict[r_d_s_f + "_xgb"]=[xgb_train_mcc_mean, xgb_train_mcc_sd, xgb_test_mcc_mean, xgb_test_mcc_sd]
 
             if "lsvc" in models:
                 lsvc_train_mcc_mean = sum(lsvc_best_mean_mcc)/len(lsvc_best_mean_mcc)
                 lsvc_train_mcc_sd = np.std(lsvc_best_mean_mcc)
                 lsvc_test_mcc_mean = sum(lsvc_test_score_mcc)/len(lsvc_test_score_mcc)
                 lsvc_test_mcc_sd = np.std(lsvc_test_score_mcc)
-                master_score_dict[r_d_s + "_lsvc"]=[lsvc_train_mcc_mean, lsvc_train_mcc_sd, lsvc_test_mcc_mean, lsvc_test_mcc_sd]
+                master_score_dict[r_d_s_f + "_lsvc"]=[lsvc_train_mcc_mean, lsvc_train_mcc_sd, lsvc_test_mcc_mean, lsvc_test_mcc_sd]
 
             if "knn" in models:
                 knn_train_mcc_mean = sum(knn_best_mean_mcc)/len(knn_best_mean_mcc)
                 knn_train_mcc_sd = np.std(knn_best_mean_mcc)
                 knn_test_mcc_mean = sum(knn_test_score_mcc)/len(knn_test_score_mcc)
                 knn_test_mcc_sd = np.std(knn_test_score_mcc)
-                master_score_dict[r_d_s + "_knn"]=[knn_train_mcc_mean, knn_train_mcc_sd, knn_test_mcc_mean, knn_test_mcc_sd]
+                master_score_dict[r_d_s_f + "_knn"]=[knn_train_mcc_mean, knn_train_mcc_sd, knn_test_mcc_mean, knn_test_mcc_sd]
 
             if "svc" in models:
                 svc_train_mcc_mean = sum(svc_best_mean_mcc)/len(svc_best_mean_mcc)
                 svc_train_mcc_sd = np.std(svc_best_mean_mcc)
                 svc_test_mcc_mean = sum(svc_test_score_mcc)/len(svc_test_score_mcc)
                 svc_test_mcc_sd = np.std(svc_test_score_mcc)
-                master_score_dict[r_d_s + "_svc"]=[svc_train_mcc_mean, svc_train_mcc_sd, svc_test_mcc_mean, svc_test_mcc_sd]
+                master_score_dict[r_d_s_f + "_svc"]=[svc_train_mcc_mean, svc_train_mcc_sd, svc_test_mcc_mean, svc_test_mcc_sd]
 
             if "rf" in models:
                 rf_train_mcc_mean = sum(rf_best_mean_mcc)/len(rf_best_mean_mcc)
                 rf_train_mcc_sd = np.std(rf_best_mean_mcc)
                 rf_test_mcc_mean = sum(rf_test_score_mcc)/len(rf_test_score_mcc)
                 rf_test_mcc_sd = np.std(rf_test_score_mcc)
-                master_score_dict[r_d_s + "_rf"]=[rf_train_mcc_mean, rf_train_mcc_sd, rf_test_mcc_mean, rf_test_mcc_sd]
+                master_score_dict[r_d_s_f + "_rf"]=[rf_train_mcc_mean, rf_train_mcc_sd, rf_test_mcc_mean, rf_test_mcc_sd]
 
             if "lor-ridge" in models:
                 lor_ridge_train_mcc_mean = sum(lor_ridge_best_mean_mcc)/len(lor_ridge_best_mean_mcc)
                 lor_ridge_train_mcc_sd = np.std(lor_ridge_best_mean_mcc)
                 lor_ridge_test_mcc_mean = sum(lor_ridge_test_score_mcc)/len(lor_ridge_test_score_mcc)
                 lor_ridge_test_mcc_sd = np.std(lor_ridge_test_score_mcc)
-                master_score_dict[r_d_s + "_lor-ridge"]=[lor_ridge_train_mcc_mean, lor_ridge_train_mcc_sd, lor_ridge_test_mcc_mean, lor_ridge_test_mcc_sd]
+                master_score_dict[r_d_s_f + "_lor-ridge"]=[lor_ridge_train_mcc_mean, lor_ridge_train_mcc_sd, lor_ridge_test_mcc_mean, lor_ridge_test_mcc_sd]
 
             if "lor-lasso" in models:
                 lor_lasso_train_mcc_mean = sum(lor_lasso_best_mean_mcc)/len(lor_lasso_best_mean_mcc)
                 lor_lasso_train_mcc_sd = np.std(lor_lasso_best_mean_mcc)
                 lor_lasso_test_mcc_mean = sum(lor_lasso_test_score_mcc)/len(lor_lasso_test_score_mcc)
                 lor_lasso_test_mcc_sd = np.std(lor_lasso_test_score_mcc)
-                master_score_dict[r_d_s + "_lor-lasso"]=[lor_lasso_train_mcc_mean, lor_lasso_train_mcc_sd, lor_lasso_test_mcc_mean, lor_lasso_test_mcc_sd]
+                master_score_dict[r_d_s_f + "_lor-lasso"]=[lor_lasso_train_mcc_mean, lor_lasso_train_mcc_sd, lor_lasso_test_mcc_mean, lor_lasso_test_mcc_sd]
 
             if "mlp" in models:
                 mlp_train_mcc_mean = sum(mlp_best_mean_mcc)/len(mlp_best_mean_mcc)
                 mlp_train_mcc_sd = np.std(mlp_best_mean_mcc)
                 mlp_test_mcc_mean = sum(mlp_test_score_mcc)/len(mlp_test_score_mcc)
                 mlp_test_mcc_sd = np.std(mlp_test_score_mcc)
-                master_score_dict[r_d_s + "_mlp"]=[mlp_train_mcc_mean, mlp_train_mcc_sd, mlp_test_mcc_mean, mlp_test_mcc_sd]
+                master_score_dict[r_d_s_f + "_mlp"]=[mlp_train_mcc_mean, mlp_train_mcc_sd, mlp_test_mcc_mean, mlp_test_mcc_sd]
 
 
 # Turn the master df into df and save
@@ -898,6 +926,7 @@ score_df["rank"] = score_df.index.str.split("_").str[0]
 score_df["datatype"] = score_df.index.str.split("_").str[1]
 score_df["seqtype"] = score_df.index.str.split("_").str[2]
 score_df["model"] = score_df.index.str.split("_").str[3]
+score_df["feature_selection"] = score_df.index.str.split("_").str[4]
 score_df.to_csv(os.path.join(outdir, "score_df.csv"), index=False)
 
 # Save taxa lists
