@@ -363,7 +363,6 @@ for rank in ranks:
     ## Save in dict
     taxa_list_dic = {"dna_taxa": dna_taxa, "rna_taxa": rna_taxa, "esv_16s_taxa": esv_16s_taxa,
         "esv_its_taxa": esv_its_taxa, "otu_16s_taxa": otu_16s_taxa, "otu_its_taxa": otu_its_taxa}
-    master_taxa_list_dic[rank] = taxa_list_dic
 
     ## Dependent variable distribution
     if plots==True:
@@ -478,10 +477,15 @@ for rank in ranks:
         if "16s-its-esv" in seq_types:
             df_taxa_16s_its_esv = pd.concat([df_taxa_16s_esv.reset_index().drop("index", axis=1), df_taxa_its_esv.reset_index().drop("index", axis=1)], axis=1)
             df_vars_16s_its_esv = df_vars_16s_esv.reset_index().drop("index", axis=1)
+            taxa_list_dic["esv_16s_its_taxa"] = list(df_taxa_16s_its_esv.columns)
 
         if "16s-its-otu" in seq_types:
             df_taxa_16s_its_otu = pd.concat([df_taxa_16s_otu.reset_index().drop("index", axis=1), df_taxa_its_otu.reset_index().drop("index", axis=1)], axis=1)
             df_vars_16s_its_otu = df_vars_16s_otu.reset_index().drop("index", axis=1)
+            taxa_list_dic["otu_16s_its_taxa"] = list(df_taxa_16s_its_otu.columns)
+
+        master_taxa_list_dic[rank] = taxa_list_dic
+
 
         ## Standardize amplicon sequencing data if abundance (Note: done after multi-marker combination since StandardScaler has to be applied to all features collectively)
         if data_type=="abundance":
