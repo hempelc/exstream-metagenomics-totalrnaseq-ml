@@ -479,14 +479,12 @@ for rank in ranks:
             df_taxa_16s_its_esv.index = df_taxa_16s_esv.index.str.replace("16S", "16S-ITS")
             df_vars_16s_its_esv = df_vars_16s_esv.reset_index().drop("index", axis=1)
             df_vars_16s_its_esv.index = df_vars_16s_esv.index.str.replace("16S", "16S-ITS")
-            taxa_list_dic["esv_16s_its_taxa"] = list(df_taxa_16s_its_esv.columns)
 
         if "16s-its-otu" in seq_types:
             df_taxa_16s_its_otu = pd.concat([df_taxa_16s_otu.reset_index().drop("index", axis=1), df_taxa_its_otu.reset_index().drop("index", axis=1)], axis=1)
             df_taxa_16s_its_otu.index = df_taxa_16s_otu.index.str.replace("16S", "16S-ITS")
             df_vars_16s_its_otu = df_vars_16s_otu.reset_index().drop("index", axis=1)
             df_vars_16s_its_otu.index = df_vars_16s_otu.index.str.replace("16S", "16S-ITS")
-            taxa_list_dic["otu_16s_its_taxa"] = list(df_taxa_16s_its_otu.columns)
 
         master_taxa_list_dic[rank] = taxa_list_dic
 

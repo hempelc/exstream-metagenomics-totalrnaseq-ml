@@ -1,7 +1,10 @@
 library('circlize')
+library('glue')
 
-dffile = "/Users/christopherhempel/Desktop/overlap_df.csv"
-outfile = "/Users/christopherhempel/Desktop/chorddiagram.svg"
+rank="phylum"
+
+dffile = glue("/Users/christopherhempel/Desktop/exstream_data_visualization_outdir/overlap_df_{rank}.csv")
+outfile = glue("/Users/christopherhempel/Desktop/exstream_data_visualization_outdir/chorddiagram_{rank}.svg")
 
 df = read.csv(dffile)
 
