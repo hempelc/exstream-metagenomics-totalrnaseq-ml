@@ -931,8 +931,8 @@ score_df.columns = ["train_mcc_mean", "train_mcc_sd", "test_mcc_mean", "test_mcc
 score_df["rank"] = score_df.index.str.split("_").str[0]
 score_df["datatype"] = score_df.index.str.split("_").str[1]
 score_df["seqtype"] = score_df.index.str.split("_").str[2]
-score_df["model"] = score_df.index.str.split("_").str[3]
-score_df["feature_selection"] = score_df.index.str.split("_").str[4]
+score_df["feature_selection"] = score_df.index.str.split("_").str[3]
+score_df["model"] = score_df.index.str.split("_").str[4]
 score_df.to_csv(os.path.join(outdir, "score_df.csv"), index=False)
 
 # Save taxa lists

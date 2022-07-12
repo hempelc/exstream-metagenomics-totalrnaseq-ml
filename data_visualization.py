@@ -11,8 +11,8 @@ import os
 import pickle5 as pickle
 
 # File paths
-score_csv_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_analysis_no_mlp_no_fs_no_multimarker/score_df.csv"
-taxa_list_dic_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_analysis_new/taxa_lists.pickle"
+score_csv_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/exstream_data_visualization_outdir/master_score_df.csv"
+taxa_list_dic_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/exstream_data_visualization_outdir/taxa_lists.pickle"
 outdir = "/Users/christopherhempel/Desktop/exstream_data_visualization_outdir"
 
 if not os.path.exists(outdir):
@@ -68,10 +68,7 @@ heatmap.write_image(os.path.join(outdir, "heatmap.svg"))
 # Do for lowest and highest rank (phylum and species)
 for rank in ["phylum", "species"]:
     # Get name of all seqtypes in taxa list (unfortunately I didn't name all seqtypes consistently)
-    rank = "phylum"
     seqtypes_chord = taxa_list_dic[rank]["dna_taxa"].keys()
-a = taxa_list_dic[rank]["16s-otu"]
-sorted(a)
     # First, get number of overlapping taxa between seqtypes
     # Get all possible combinations of seqtypes
     combos = list(itertools.combinations(seqtypes_chord, 2))
@@ -173,7 +170,7 @@ lr_summary.loc[lr_summary["p-value"] > 0.05, 'significance_cat'] = ""
 #     'model_rf', 'model_svc', 'model_xgb'])
 lr_summary = lr_summary.reindex(['rank_phylum', 'rank_class', 'rank_order', 'rank_family', 'rank_genus',
     'rank_species', 'datatype_abundance', 'datatype_pa', "seqtype_16s-esv", "seqtype_16s-otu", "seqtype_its-esv",
-    "seqtype_its-otu", 'seqtype_metagenomics', 'seqtype_totalrnaseq', 'model_knn',
+    "seqtype_its-otu", 'seqtype_16s-its-esv', 'seqtype_16s-its-otu', 'seqtype_metagenomics', 'seqtype_totalrnaseq', 'model_knn',
     'model_lor-lasso', 'model_lor-ridge', 'model_lsvc',
     'model_rf', 'model_svc', 'model_xgb', "feature-selection_wo-fs"])
 
@@ -182,7 +179,7 @@ cols = ["#8B4A97", "#5D6EB4", "#A2903D", "#B24A39", "#4BA566"]
 fig = px.bar(lr_summary, x='method', y='Coefficient', color='category', text='significance_cat', color_discrete_sequence = cols)
 fig.update_layout(xaxis_tickangle=45)
 fig.update_traces(textposition='outside')
-fig.update_yaxes(range=[-0.07, 0.11], nticks = 8)
+fig.update_yaxes(range=[-0.11, 0.12], nticks = 8)
 fig.show()
 fig.write_image(os.path.join(outdir, "coefs_pvals_overall.svg"))
 
@@ -226,6 +223,6 @@ for seqtype in seqtypes:
     fig = px.bar(lr_summary, x='method', y='Coefficient', color='category', text='significance_cat', color_discrete_sequence = cols, title=seqtype)
     fig.update_layout(xaxis_tickangle=45)
     fig.update_traces(textposition='outside')
-    fig.update_yaxes(range=[-0.07, 0.11], nticks = 8)
+    fig.update_yaxes(range=[-0.11, 0.12], nticks = 8)
     fig.show()
     fig.write_image(os.path.join(outdir, "coefs_pvals_{0}.svg".format(seqtype)))
