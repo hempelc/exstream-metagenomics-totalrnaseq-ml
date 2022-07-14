@@ -5,6 +5,7 @@ import statsmodels.api as sm
 import numpy as np
 import itertools
 import os
+from scipy.stats import pointbiserialr #v1.7.3
 # The pickle object has been genereated under python >=3.8 on a different machine,
 # while the processing machine has python <3.8. To read in the pickle object generated
 # on a higher pickle version, we need to import a specific pickle package
@@ -13,7 +14,7 @@ import pickle5 as pickle
 # File paths
 score_csv_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/exstream_data_visualization_outdir/master_score_df.csv"
 taxa_list_dic_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/exstream_data_visualization_outdir/taxa_lists.pickle"
-outdir = "/Users/christopherhempel/Desktop/exstream_data_visualization_outdir"
+outdir = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/exstream_data_visualization_outdir"
 
 if not os.path.exists(outdir):
     os.makedirs(outdir)
@@ -68,7 +69,7 @@ heatmap.write_image(os.path.join(outdir, "heatmap.svg"))
 # Do for lowest and highest rank (phylum and species)
 for rank in ["phylum", "species"]:
     # Get name of all seqtypes in taxa list (unfortunately I didn't name all seqtypes consistently)
-    seqtypes_chord = taxa_list_dic[rank]["dna_taxa"].keys()
+    seqtypes_chord = taxa_list_dic[rank].keys()
     # First, get number of overlapping taxa between seqtypes
     # Get all possible combinations of seqtypes
     combos = list(itertools.combinations(seqtypes_chord, 2))
@@ -146,40 +147,40 @@ Y = df['test_mcc_mean']
 
 # Generate dummy variables
 X_dummies = pd.get_dummies(X)
-X_dummies = sm.add_constant(X_dummies) # adding a constant
 
-# Make model
-lr_model = sm.OLS(Y, X_dummies).fit()
+# Correlation estimation
+cor_dic={}
+for col in X_dummies.columns:
+    Y_cor=Y.to_numpy()
+    X=np.array(X_dummies[col])
+    cor=pointbiserialr(X,Y_cor)
+    cor_dic[col]=cor
+cor_df = pd.DataFrame(cor_dic , index=["coefficient", "p-value"]).transpose().reset_index()
 
-## Summarize the output and extract coefs and p vals
-lr_summary = lr_model.summary2().tables[1][['Coef.', 'P>|t|']]
-lr_summary = lr_summary.rename(columns={"Coef.": "Coefficient", "P>|t|": "p-value"})
-#lr_summary = lr_summary.drop("const")
-lr_summary = lr_summary.reset_index()
-lr_summary[['category', 'method']] = lr_summary['index'].str.split('_', expand=True)
-lr_summary = lr_summary.set_index('index')
+# Make significance categories
+cor_df.loc[cor_df["p-value"] <= 0.001 , 'significance_cat'] = "***"
+cor_df.loc[cor_df["p-value"] > 0.001 , 'significance_cat'] = "**"
+cor_df.loc[cor_df["p-value"] > 0.01 , 'significance_cat'] = "*"
+cor_df.loc[cor_df["p-value"] > 0.05, 'significance_cat'] = ""
 
-lr_summary.loc[lr_summary["p-value"] <= 0.001 , 'significance_cat'] = "***"
-lr_summary.loc[lr_summary["p-value"] > 0.001 , 'significance_cat'] = "**"
-lr_summary.loc[lr_summary["p-value"] > 0.01 , 'significance_cat'] = "*"
-lr_summary.loc[lr_summary["p-value"] > 0.05, 'significance_cat'] = ""
-# lr_summary = lr_summary.reindex(['rank_phylum', 'rank_class', 'rank_order', 'rank_family', 'rank_genus',
-#     'rank_species', 'datatype_abundance', 'datatype_pa', "seqtype_16s-esv", "seqtype_16s-otu", "seqtype_its-esv",
-#     "seqtype_its-otu", 'seqtype_metagenomics', 'seqtype_totalrnaseq', 'model_knn',
-#     'model_lor-lasso', 'model_lor-ridge', 'model_lsvc', 'model_mlp',
-#     'model_rf', 'model_svc', 'model_xgb'])
-lr_summary = lr_summary.reindex(['rank_phylum', 'rank_class', 'rank_order', 'rank_family', 'rank_genus',
+# Organize df
+cor_df[["category", "method"]] = cor_df["index"].str.split("_", n=-1, expand=True)
+cor_df = cor_df.set_index("index")
+cor_df = cor_df.reindex(['rank_phylum', 'rank_class', 'rank_order', 'rank_family', 'rank_genus',
     'rank_species', 'datatype_abundance', 'datatype_pa', "seqtype_16s-esv", "seqtype_16s-otu", "seqtype_its-esv",
     "seqtype_its-otu", 'seqtype_16s-its-esv', 'seqtype_16s-its-otu', 'seqtype_metagenomics', 'seqtype_totalrnaseq', 'model_knn',
     'model_lor-lasso', 'model_lor-ridge', 'model_lsvc',
     'model_rf', 'model_svc', 'model_xgb', "feature-selection_wo-fs"])
 
+#Temporary:
+cor_df = cor_df.drop("feature-selection_wo-fs")
+
 # Make figure
 cols = ["#8B4A97", "#5D6EB4", "#A2903D", "#B24A39", "#4BA566"]
-fig = px.bar(lr_summary, x='method', y='Coefficient', color='category', text='significance_cat', color_discrete_sequence = cols)
+fig = px.bar(cor_df, x='method', y='coefficient', color='category', text='significance_cat', color_discrete_sequence = cols)
 fig.update_layout(xaxis_tickangle=45)
 fig.update_traces(textposition='outside')
-fig.update_yaxes(range=[-0.11, 0.12], nticks = 8)
+fig.update_yaxes(range=[-0.6, 0.6], nticks = 8)
 fig.show()
 fig.write_image(os.path.join(outdir, "coefs_pvals_overall.svg"))
 
@@ -191,38 +192,43 @@ for seqtype in seqtypes:
 
     # Generate dummy variables
     X_dummies = pd.get_dummies(X)
-    X_dummies = sm.add_constant(X_dummies) # adding a constant
 
-    # Make model
-    lr_model = sm.OLS(Y, X_dummies).fit()
+    # Correlation estimation
+    cor_dic={}
+    for col in X_dummies.columns:
+        Y_cor=Y.to_numpy()
+        X=np.array(X_dummies[col])
+        cor=pointbiserialr(X,Y_cor)
+        cor_dic[col]=cor
+    cor_df = pd.DataFrame(cor_dic , index=["coefficient", "p-value"]).transpose().reset_index()
 
-    ## Summarize the output and extract coefs and p vals
-    lr_summary = lr_model.summary2().tables[1][['Coef.', 'P>|t|']]
-    lr_summary = lr_summary.rename(columns={"Coef.": "Coefficient", "P>|t|": "p-value"})
-    #lr_summary = lr_summary.drop("const")
-    lr_summary = lr_summary.reset_index()
-    lr_summary[['category', 'method']] = lr_summary['index'].str.split('_', expand=True)
-    lr_summary = lr_summary.set_index('index')
+    # Make significance categories
+    cor_df.loc[cor_df["p-value"] <= 0.001 , 'significance_cat'] = "***"
+    cor_df.loc[cor_df["p-value"] > 0.001 , 'significance_cat'] = "**"
+    cor_df.loc[cor_df["p-value"] > 0.01 , 'significance_cat'] = "*"
+    cor_df.loc[cor_df["p-value"] > 0.05, 'significance_cat'] = ""
 
-    lr_summary.loc[lr_summary["p-value"] <= 0.001 , 'significance_cat'] = "***"
-    lr_summary.loc[lr_summary["p-value"] > 0.001 , 'significance_cat'] = "**"
-    lr_summary.loc[lr_summary["p-value"] > 0.01 , 'significance_cat'] = "*"
-    lr_summary.loc[lr_summary["p-value"] > 0.05, 'significance_cat'] = ""
-    # lr_summary = lr_summary.reindex(['rank_phylum', 'rank_class', 'rank_order', 'rank_family', 'rank_genus',
+    # Organize df
+    cor_df[["category", "method"]] = cor_df["index"].str.split("_", n=-1, expand=True)
+    cor_df = cor_df.set_index("index")
+    # cor_df = cor_df.reindex(['rank_phylum', 'rank_class', 'rank_order', 'rank_family', 'rank_genus',
     #     'rank_species', 'datatype_abundance', 'datatype_pa', "seqtype_16s-esv", "seqtype_16s-otu", "seqtype_its-esv",
     #     "seqtype_its-otu", 'seqtype_metagenomics', 'seqtype_totalrnaseq', 'model_knn',
     #     'model_lor-lasso', 'model_lor-ridge', 'model_lsvc', 'model_mlp',
     #     'model_rf', 'model_svc', 'model_xgb'])
-    lr_summary = lr_summary.reindex(['rank_phylum', 'rank_class', 'rank_order', 'rank_family', 'rank_genus',
+    cor_df = cor_df.reindex(['rank_phylum', 'rank_class', 'rank_order', 'rank_family', 'rank_genus',
         'rank_species', 'datatype_abundance', 'datatype_pa', 'model_knn',
         'model_lor-lasso', 'model_lor-ridge', 'model_lsvc',
         'model_rf', 'model_svc', 'model_xgb', "feature-selection_wo-fs"])
 
+    #Temporary:
+    cor_df = cor_df.drop("feature-selection_wo-fs")
+
     # Make figure
     cols = ["#8B4A97", "#5D6EB4", "#B24A39", "#4BA566"]
-    fig = px.bar(lr_summary, x='method', y='Coefficient', color='category', text='significance_cat', color_discrete_sequence = cols, title=seqtype)
+    fig = px.bar(cor_df, x='method', y='coefficient', color='category', text='significance_cat', color_discrete_sequence = cols, title=seqtype)
     fig.update_layout(xaxis_tickangle=45)
     fig.update_traces(textposition='outside')
-    fig.update_yaxes(range=[-0.11, 0.12], nticks = 8)
+    fig.update_yaxes(range=[-0.6, 0.6], nticks = 8)
     fig.show()
     fig.write_image(os.path.join(outdir, "coefs_pvals_{0}.svg".format(seqtype)))
