@@ -9,11 +9,10 @@ import itertools
 import plotly.express as px
 
 # Set variables
-NCBI_file_indir = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/exstream-metagenomics-totalrnaseq-ml/chorddiagram_files/"
 figure_outdir = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/exstream_data_visualization_outdir"
 taxa_list_dic_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_files_for_ml/taxa_lists.pickle"
-NCBI_scientific_file="NCBI_staxids_scientific.txt"
-NCBI_non_scientific_file="NCBI_staxids_non_scientific.txt"
+NCBI_scientific_file="/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_files_for_ml/NCBI_staxids_scientific.txt"
+NCBI_non_scientific_file="/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_files_for_ml/NCBI_staxids_non_scientific.txt"
 
 # Define function to get dictinory keys from values
 def key_from_value(dict, value):
@@ -25,10 +24,10 @@ if not os.path.exists(figure_outdir):
 
 # Read in files
 ## Taxon lists
-with open(os.path.join(NCBI_file_indir, taxa_list_dic_file), 'rb') as handle:
+with open(taxa_list_dic_file, 'rb') as handle:
     taxa_list_dic = pickle.load(handle)
 # NCBI scientific names file as dictionary
-NCBI_scientific = open(os.path.join(NCBI_file_indir, NCBI_scientific_file),'r')
+NCBI_scientific = open(NCBI_scientific_file,'r')
 ## Set all file content to lowercase, so that matching of the files later is not
 ## depending on upper- or lowercase:
 NCBI_scientific_lower = (line.lower() for line in NCBI_scientific)
@@ -37,7 +36,7 @@ NCBI_scientific_dict={}
 for row in reader1:
 	NCBI_scientific_dict[row[0]]=row[1]
 # NCBI non-scientific names file as dictionary
-NCBI_non_scientific = open(os.path.join(NCBI_file_indir, NCBI_non_scientific_file),'r')
+NCBI_non_scientific = open(NCBI_non_scientific_file,'r')
 ## Set all file content to lowercase, so that matching of the files later is not
 ## depending on upper- or lowercase:
 NCBI_non_scientific_lower = (line.lower() for line in NCBI_non_scientific)
