@@ -64,8 +64,9 @@ for seqtype in seqtypes:
 
 
 # Heatmap
-## Adapt seqtypes for heatmap organization
+## Adapt seqtypes and ranks for heatmap organization
 heatmap_df = df.replace('its-otu', 'a-its-otu').replace('its-esv', 'b-its-esv').replace('16s-otu', 'c-16s-otu').replace('16s-esv', 'd-16s-esv').replace('16s-its-otu', 'e-16s-its-otu').replace('16s-its-esv', 'f-16s-its-esv')
+heatmap_df = heatmap_df.replace('phylum', 'a-phylum').replace('class', 'b-class').replace('order', 'c-order').replace('family', 'd-family').replace('genus', 'e-genus').replace('species', 'f-species')
 
 ## Combine columns for visualization
 heatmap_df["rank+model"] = heatmap_df["rank"] + "_" + heatmap_df["model"]
@@ -74,20 +75,25 @@ heatmap_df["stype+fs"] = heatmap_df["seqtype"] + "_" + heatmap_df["feature-selec
 heatmap_df["stype+rank"] = heatmap_df["seqtype"] + "_" + heatmap_df["rank"]
 heatmap_df["fs+model"] = heatmap_df["feature-selection"] + "_" + heatmap_df["model"]
 
+## Datatype has no significance effect, so we drop the rows with abundance (pa has the signel highest MCC)
+heatmap_df = heatmap_df[heatmap_df['datatype']=="pa"]
+
 ## Visualization
 ### Category 1
 df_wide = heatmap_df.pivot_table(index="rank+model", columns="stype+fs", values='test_mcc_mean').transpose()
 heatmap = px.imshow(df_wide)
 heatmap.show()
-heatmap.write_image(os.path.join(outdir, "heatmap_v1.svg"), height=1000, width=1800)
-heatmap.write_image(os.path.join(outdir, "heatmap_v1.png"), height=600, width=1200)
+heatmap.update_xaxes(tickangle = 90)
+heatmap.write_image(os.path.join(outdir, "heatmap_v1.svg"), height=600, width=1600)
+heatmap.write_image(os.path.join(outdir, "heatmap_v1.png"), height=600, width=1600)
 
 ### Category 2
 df_wide = heatmap_df.pivot_table(index="stype+rank", columns="fs+model", values='test_mcc_mean').transpose()
 heatmap = px.imshow(df_wide)
+heatmap.update_xaxes(tickangle = 90)
 heatmap.show()
-heatmap.write_image(os.path.join(outdir, "heatmap_v2.svg"), height=1000, width=1800)
-heatmap.write_image(os.path.join(outdir, "heatmap_v2.png"), height=600, width=1200)
+heatmap.write_image(os.path.join(outdir, "heatmap_v2.svg"), height=600, width=1600)
+heatmap.write_image(os.path.join(outdir, "heatmap_v2.png"), height=600, width=1600)
 
 
 # Coefficients and p-values
@@ -130,11 +136,11 @@ cor_df = cor_df.reindex(['rank_phylum', 'rank_class', 'rank_order', 'rank_family
 ## Make figure
 cols = ["#ba543d", "#ac9c3d", "#687ad2", "#b94a73", "#56ae6c", "#9550a1"]
 fig = px.bar(cor_df, x='method', y='coefficient', color='category', text='significance_cat', color_discrete_sequence = cols)
-fig.update_layout(xaxis_tickangle=45)
+fig.update_layout(xaxis_tickangle=30)
 fig.update_traces(textposition='outside')
 fig.show()
-fig.write_image(os.path.join(outdir, "coefs_pvals_overall.svg"))
-fig.write_image(os.path.join(outdir, "coefs_pvals_overall.png"), width=1000, height=500)
+fig.write_image(os.path.join(outdir, "coefs_pvals_overall.svg"), width=1200, height=500)
+fig.write_image(os.path.join(outdir, "coefs_pvals_overall.png"), width=1200, height=500)
 
 
 ## For seqtypes separately
@@ -172,7 +178,7 @@ for seqtype in seqtypes:
     ### Make figure
     cols = ["#ba543d", "#ac9c3d", "#56ae6c", "#9550a1"]
     fig = px.bar(cor_df, x='method', y='coefficient', color='category', text='significance_cat', color_discrete_sequence = cols, title=seqtype)
-    fig.update_layout(xaxis_tickangle=45)
+    fig.update_layout(xaxis_tickangle=30)
     fig.update_traces(textposition='outside')
     fig.update_yaxes(range=[-0.68, 0.68], nticks = 8)
     fig.show()
