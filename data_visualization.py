@@ -97,26 +97,56 @@ heatmap.write_image(os.path.join(outdir, "heatmap_v2.png"), height=600, width=16
 
 
 # Coefficients and p-values
-## Create additional column for clustering type
-df.loc[df["seqtype"].str.contains('esv') , 'clustering'] = "esv"
-df.loc[df["seqtype"].str.contains('otu') , 'clustering'] = "otu"
-df.loc[df["seqtype"].str.contains('omics') , 'clustering'] = "omics"
+## Create additional column for sequencing method
+df.loc[df["seqtype"].str.contains('16s') , 'seqmethod'] = "16s"
+df.loc[df["seqtype"].str.contains('its') , 'seqmethod'] = "its"
+df.loc[df["seqtype"].str.contains('16s-its') , 'seqmethod'] = "16s-its"
+df.loc[df["seqtype"].str.contains('metagenomics') , 'seqmethod'] = "metagenomics"
+df.loc[df["seqtype"].str.contains('totalrnaseq') , 'seqmethod'] = "totalrnaseq"
 
-## Separate
-X = df[['rank','datatype', 'seqtype', 'model', 'feature-selection', 'clustering']]
+## Run correlation test for all seqtypes
+### Separate
+X = df[['seqmethod', 'rank', 'datatype', 'feature-selection', 'model']]
 Y = df['test_mcc_mean']
 
-## Generate dummy variables
+### Generate dummy variables
 X_dummies = pd.get_dummies(X)
-
-## Correlation estimation
+X_dummies.columns
+### Correlation estimation
 cor_dic={}
 for col in X_dummies.columns:
     Y_cor=Y.to_numpy()
     X=np.array(X_dummies[col])
     cor=pointbiserialr(X,Y_cor)
     cor_dic[col]=cor
-cor_df = pd.DataFrame(cor_dic , index=["coefficient", "p-value"]).transpose().reset_index()
+cor_df_no_clust = pd.DataFrame(cor_dic , index=["coefficient", "p-value"]).transpose().reset_index()
+
+## Create additional column for clustering type that only applies to amplicon seq data
+df_ampseq = df[~df['seqtype'].isin(['metagenomics', 'totalrnaseq'])]
+df_ampseq.loc[df_ampseq["seqtype"].str.contains('esv') , 'clustering'] = "esv"
+df_ampseq.loc[df_ampseq["seqtype"].str.contains('otu') , 'clustering'] = "otu"
+
+## Repeat correlation test for those data
+### Separate
+X = df_ampseq['clustering']
+Y = df_ampseq['test_mcc_mean']
+
+### Generate dummy variables
+X_dummies = pd.get_dummies(X)
+X_dummies.columns
+### Correlation estimation
+cor_dic={}
+for col in X_dummies.columns:
+    Y_cor=Y.to_numpy()
+    X=np.array(X_dummies[col])
+    cor=pointbiserialr(X,Y_cor)
+    cor_dic[col]=cor
+cor_df_w_clust = pd.DataFrame(cor_dic , index=["coefficient", "p-value"]).transpose().reset_index()
+
+## Merge dfs and adapt format
+cor_df = pd.concat([cor_df_no_clust, cor_df_w_clust]).reset_index().drop(["level_0"], axis=1)
+cor_df["index"] = cor_df["index"].str.replace("esv", "clustering_esv")
+cor_df["index"] = cor_df["index"].str.replace("otu", "clustering_otu")
 
 ## Make significance categories
 cor_df.loc[cor_df["p-value"] <= 0.001 , 'significance_cat'] = "***"
@@ -127,9 +157,10 @@ cor_df.loc[cor_df["p-value"] > 0.05, 'significance_cat'] = ""
 ## Organize df
 cor_df[["category", "method"]] = cor_df["index"].str.split("_", n=-1, expand=True)
 cor_df = cor_df.set_index("index")
-cor_df = cor_df.reindex(['rank_phylum', 'rank_class', 'rank_order', 'rank_family', 'rank_genus',
-    'rank_species', 'datatype_abundance', 'datatype_pa', "seqtype_its-otu","seqtype_its-esv", "seqtype_16s-otu", "seqtype_16s-esv",
-    'seqtype_16s-its-otu', 'seqtype_16s-its-esv', 'seqtype_metagenomics', 'seqtype_totalrnaseq', 'clustering_otu', 'clustering_esv', 'clustering_omics', 'model_knn',
+cor_df = cor_df.reindex(["seqmethod_its", "seqmethod_16s", 'seqmethod_16s-its',
+    'seqmethod_metagenomics', 'seqmethod_totalrnaseq', 'clustering_otu', 'clustering_esv',
+    'rank_phylum', 'rank_class', 'rank_order', 'rank_family', 'rank_genus',
+    'rank_species', 'datatype_abundance', 'datatype_pa', 'model_knn',
     'model_lor-lasso', 'model_lor-ridge', 'model_lsvc', "model_mlp",
     'model_rf', 'model_svc', 'model_xgb', "feature-selection_w-fs", "feature-selection_wo-fs"])
 

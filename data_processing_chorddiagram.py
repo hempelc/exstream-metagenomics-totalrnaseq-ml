@@ -117,7 +117,7 @@ for rank in ["phylum", "species"]:
         .str.replace("esv_16s_taxa", "16s-esv").str.replace("esv_its_taxa", "its-esv").str.replace("otu_16s_taxa", "16s-otu").str.replace("otu_its_taxa", "its-otu")
 
     ### Save for manual processing in R
-    overlap_df.to_csv(os.path.join(NCBI_file_indir, "overlap_df_{0}.csv".format(rank)), index=False)
+    overlap_df.to_csv(os.path.join(figure_outdir, "overlap_df_{0}.csv".format(rank)), index=False)
 
 
     ### Second, get unique number of taxa for each seqtype as bubble plot
