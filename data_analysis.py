@@ -45,11 +45,11 @@ warnings.filterwarnings("ignore")
 
 # Parameters set manually
 ## Full path to directory that contains abundance/p-a data generated on the basis of multiple taxonomic ranks
-workdir = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_analysis_new/"
+workdir = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_files_for_ml/"
 ## Full path to out directory
 outdir = workdir
 ## File that contains sample infos, i.e., classes
-sample_info_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_analysis_new/sample_info.csv"
+sample_info_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_files_for_ml/sample_info.csv"
 ## Ranks to include into analysis (looped over) ["phylum", "class", "order", "family", "genus", "species"]
 ranks = ["phylum", "class", "order", "family", "genus", "species"]
 ## Data types to include into analysis (looped over) ["abundance", "pa"]
