@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import statsmodels.api as sm
 import numpy as np
 import os
-from scipy.stats import pointbiserialr #v1.7.3
+from scipy.stats import spearmanr #v1.7.3
 
 # File paths
 score_csv_file = "/Users/christopherhempel/Google Drive/PhD UoG/ExStream project/data_files_for_ml/score_dfs/master_score_df.csv"
@@ -107,17 +107,15 @@ df.loc[df["seqtype"].str.contains('totalrnaseq') , 'seqmethod'] = "totalrnaseq"
 ## Run correlation test for all seqtypes
 ### Separate
 X = df[['seqmethod', 'rank', 'datatype', 'feature-selection', 'model']]
-Y = df['test_mcc_mean']
+Y = df['test_mcc_mean'].to_numpy()
 
 ### Generate dummy variables
 X_dummies = pd.get_dummies(X)
-X_dummies.columns
 ### Correlation estimation
 cor_dic={}
 for col in X_dummies.columns:
-    Y_cor=Y.to_numpy()
     X=np.array(X_dummies[col])
-    cor=pointbiserialr(X,Y_cor)
+    cor=spearmanr(X,Y)
     cor_dic[col]=cor
 cor_df_no_clust = pd.DataFrame(cor_dic , index=["coefficient", "p-value"]).transpose().reset_index()
 
@@ -129,7 +127,7 @@ df_ampseq.loc[df_ampseq["seqtype"].str.contains('otu') , 'clustering'] = "otu"
 ## Repeat correlation test for those data
 ### Separate
 X = df_ampseq['clustering']
-Y = df_ampseq['test_mcc_mean']
+Y = df_ampseq['test_mcc_mean'].to_numpy()
 
 ### Generate dummy variables
 X_dummies = pd.get_dummies(X)
@@ -137,9 +135,8 @@ X_dummies.columns
 ### Correlation estimation
 cor_dic={}
 for col in X_dummies.columns:
-    Y_cor=Y.to_numpy()
     X=np.array(X_dummies[col])
-    cor=pointbiserialr(X,Y_cor)
+    cor=spearmanr(X,Y)
     cor_dic[col]=cor
 cor_df_w_clust = pd.DataFrame(cor_dic , index=["coefficient", "p-value"]).transpose().reset_index()
 
@@ -160,9 +157,9 @@ cor_df = cor_df.set_index("index")
 cor_df = cor_df.reindex(["seqmethod_its", "seqmethod_16s", 'seqmethod_16s-its',
     'seqmethod_metagenomics', 'seqmethod_totalrnaseq', 'clustering_otu', 'clustering_esv',
     'rank_phylum', 'rank_class', 'rank_order', 'rank_family', 'rank_genus',
-    'rank_species', 'datatype_abundance', 'datatype_pa', 'model_knn',
+    'rank_species', 'datatype_abundance', 'datatype_pa', "feature-selection_w-fs", "feature-selection_wo-fs", 'model_knn',
     'model_lor-lasso', 'model_lor-ridge', 'model_lsvc', "model_mlp",
-    'model_rf', 'model_svc', 'model_xgb', "feature-selection_w-fs", "feature-selection_wo-fs"])
+    'model_rf', 'model_svc', 'model_xgb'])
 
 ## Make figure
 cols = ["#ba543d", "#ac9c3d", "#687ad2", "#b94a73", "#56ae6c", "#9550a1"]
@@ -176,9 +173,9 @@ fig.write_image(os.path.join(outdir, "coefs_pvals_overall.png"), width=1200, hei
 
 ## For seqtypes separately
 for seqtype in seqtypes:
-    df_seqtype = df[df["seqtype"]==seqtype].drop(["seqtype", "clustering"], axis=1)
+    df_seqtype = df[df["seqtype"]==seqtype].drop(["seqtype"], axis=1)
     X = df_seqtype[['rank','datatype', 'model', 'feature-selection']]
-    Y = df_seqtype['test_mcc_mean']
+    Y = df_seqtype['test_mcc_mean'].to_numpy()
 
     ### Generate dummy variables
     X_dummies = pd.get_dummies(X)
@@ -186,9 +183,8 @@ for seqtype in seqtypes:
     ### Correlation estimation
     cor_dic={}
     for col in X_dummies.columns:
-        Y_cor=Y.to_numpy()
         X=np.array(X_dummies[col])
-        cor=pointbiserialr(X,Y_cor)
+        cor=spearmanr(X,Y)
         cor_dic[col]=cor
     cor_df = pd.DataFrame(cor_dic , index=["coefficient", "p-value"]).transpose().reset_index()
 
@@ -202,9 +198,9 @@ for seqtype in seqtypes:
     cor_df[["category", "method"]] = cor_df["index"].str.split("_", n=-1, expand=True)
     cor_df = cor_df.set_index("index")
     cor_df = cor_df.reindex(['rank_phylum', 'rank_class', 'rank_order', 'rank_family', 'rank_genus',
-        'rank_species', 'datatype_abundance', 'datatype_pa', 'model_knn',
+        'rank_species', 'datatype_abundance', 'datatype_pa', "feature-selection_w-fs", "feature-selection_wo-fs", 'model_knn',
         'model_lor-lasso', 'model_lor-ridge', 'model_lsvc', 'model_mlp',
-        'model_rf', 'model_svc', 'model_xgb', "feature-selection_w-fs", "feature-selection_wo-fs"])
+        'model_rf', 'model_svc', 'model_xgb'])
 
     ### Make figure
     cols = ["#ba543d", "#ac9c3d", "#56ae6c", "#9550a1"]
