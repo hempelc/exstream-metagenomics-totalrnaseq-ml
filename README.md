@@ -6,5 +6,5 @@ The project is part of the following publication:<br>
 
 The entire workflow is shown in the following:
 
-<img src="https://github.com/hempelc/exstream-metagenomics-totalrnaseq-ml/blob/main/workflow.png" alt="workflow" width="800"/>
+<img src="https://github.com/hempelc/exstream-metagenomics-totalrnaseq-ml/blob/main/workflow.png" alt="workflow" width="900"/>
 
